@@ -2134,6 +2134,9 @@
     const x = Math.min(Math.max(r ? r.left + r.width / 2 : innerWidth / 2, half + 16), innerWidth - half - 16);
     el.style.left = x + "px";
     el.style.bottom = (innerHeight - bar.top + 14) + "px";
+    // the room above the toolbar: tall popovers (picker, options) clamp to
+    // it and scroll their body instead of running off the top of the window
+    el.style.setProperty("--pop-max", Math.max(200, bar.top - 14 - 12) + "px");
   }
 
   /* ---------------------------------------------------------- add-slide picker */
