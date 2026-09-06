@@ -510,12 +510,14 @@
       t.onclick = () => { toggleOverview(false); show(i); };
       grid.append(t);
     });
-    requestAnimationFrame(() => {
-      $$(".thumb__frame", grid).forEach(f => {
-        $(".thumb__scaler", f).style.transform = `scale(${f.clientWidth / W})`;
-      });
-    });
+    requestAnimationFrame(rescaleOverview);
     renderOvCount();
+  }
+
+  function rescaleOverview() {
+    $$("#ov-grid .thumb__frame").forEach(f => {
+      $(".thumb__scaler", f).style.transform = `scale(${f.clientWidth / W})`;
+    });
   }
 
   const slideTitle = s =>
@@ -2443,7 +2445,10 @@
   /* --------------------------------------------------------------- events */
   function bind() {
     addEventListener("resize", fit);
-    addEventListener("resize", () => ovCols = 0);   // auto-fill grid may reflow
+    addEventListener("resize", () => {
+      ovCols = 0;   // auto-fill grid may reflow
+      if (overviewOpen) rescaleOverview();
+    });
     addEventListener("resize", debounce(measureAll, 150));
     addEventListener("fullscreenchange", fit);
 
