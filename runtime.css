@@ -1475,14 +1475,19 @@ body.is-editing .slide[data-overflow] .slide__overflow-badge { display: flex; }
 body.is-presenter .stage, body.is-presenter .toolbar, body.is-presenter .toast,
 body.is-presenter .overview, body.is-presenter .drawer, body.is-presenter .pop-layer,
 body.is-presenter .sheet, body.is-presenter .tip { display: none !important; }
+body.is-presenter { background: #000; }
 
 body.is-black::after { content: ""; position: fixed; inset: 0; background: #000; z-index: 999; }
 
 .presenter {
   position: fixed; inset: 0; z-index: 5;
   display: grid; grid-template-columns: 1fr 360px; grid-template-rows: 1fr auto; gap: 24px;
-  padding: 28px; background: var(--app-bg); color: var(--fg);
+  padding: 28px;
+  /* always white on black, whatever theme the deck is in — the presenter is
+     backstage chrome, not part of the deck's look, and must stay readable */
+  background: #000; color: #fff; color-scheme: dark;
 }
+.presenter::selection, .presenter *::selection { background: rgba(255, 255, 255, .25); }
 .presenter__alert {
   position: fixed; top: 28px; left: 50%; transform: translateX(-50%);
   z-index: 6; max-width: 640px; padding: 12px 18px; border-radius: 10px;
@@ -1503,7 +1508,7 @@ body.is-black::after { content: ""; position: fixed; inset: 0; background: #000;
   flex: 1; overflow: auto;
   font: 400 18px/1.55 var(--font-body); color: rgba(246, 245, 243, .88);
 }
-.presenter__no-notes { color: var(--faint); font-style: italic; margin: 0; }
+.presenter__no-notes { color: rgba(255, 255, 255, .4); font-style: italic; margin: 0; }
 .presenter__foot {
   grid-column: 1 / -1;
   display: flex; align-items: center; gap: 28px;
