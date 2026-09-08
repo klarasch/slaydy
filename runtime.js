@@ -2427,6 +2427,14 @@
         case "b": chan.postMessage({ action: "black" }); break;
       }
     });
+    // clicks mirror the deck: the current-slide frame retreats on its left
+    // third and advances elsewhere, and the Next frame always advances
+    const curFrame = $("#pv-current").closest(".thumb__frame");
+    curFrame.addEventListener("click", e => {
+      const r = curFrame.getBoundingClientRect();
+      chan.postMessage({ action: (e.clientX - r.left) / r.width > 0.35 ? "next" : "prev" });
+    });
+    $("#pv-next").closest(".thumb__frame").addEventListener("click", () => chan.postMessage({ action: "next" }));
     renderPresenter();
   }
   function initMainChannel() {

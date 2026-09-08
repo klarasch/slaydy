@@ -1496,10 +1496,10 @@ body.is-black::after { content: ""; position: fixed; inset: 0; background: #000;
 }
 .presenter__alert code { font: 500 12px/1 var(--font-mono); background: rgba(255, 255, 255, .1); padding: 2px 5px; border-radius: 4px; }
 .presenter__main { display: flex; align-items: center; min-width: 0; }
-.presenter__frame { width: 100%; border-radius: 10px; }
+.presenter__frame { width: 100%; border-radius: 10px; cursor: pointer; }
 .presenter__side { display: flex; flex-direction: column; gap: 18px; min-width: 0; }
 .presenter__block--grow { flex: 1; display: flex; flex-direction: column; min-height: 0; }
-.presenter__frame--sm { width: 100%; opacity: .9; }
+.presenter__frame--sm { width: 100%; opacity: .9; cursor: pointer; }
 .presenter__lbl {
   font: 500 11px/1 var(--font-mono); letter-spacing: .1em; text-transform: uppercase;
   color: rgba(255, 255, 255, .4); margin-bottom: 8px;
