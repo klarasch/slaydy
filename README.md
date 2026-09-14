@@ -141,6 +141,10 @@ and anything in `.skillignore`); `./build.sh <name>` builds the same thing under
 
 Slaydy is the engine. A brand is a fork of it, and the fork's build is a skill of its own:
 
+In Claude Code the whole thing is a prompt: **"set up slaydy for Acme from acme.com"** makes the
+fork beside your slaydy checkout, writes the brand, builds and commits it (`SKILL.md` §8), and
+**"take the slaydy update"** runs step 5 for you (§9). By hand:
+
 1. Fork, or copy the folder. Keep an upstream checkout beside it.
 2. Put the brand in `themes/<brand>.css` (+ `fonts/`, `images/`), and its rules in
    `themes/<brand>.md`. Anything bigger goes in `custom/` — `CUSTOMIZING.md`.
