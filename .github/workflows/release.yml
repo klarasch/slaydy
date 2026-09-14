@@ -1,0 +1,35 @@
+# Push a version tag and this builds the installable skill and attaches its zip to a GitHub
+# release — the download the no-code install starts from:
+#
+#     git tag v1.2.0 && git push origin v1.2.0
+#
+# A fork carries this file too: build.sh names the zip from SKILL.fork.md, so a fork's tag
+# releases <name>-skill.zip with nothing to change here.
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Build the skill
+        run: ./build.sh
+
+      - name: Attach the zip to a release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          zip=$(ls dist/*-skill.zip)
+          gh release create "$GITHUB_REF_NAME" "$zip" --title "$GITHUB_REF_NAME" --generate-notes
