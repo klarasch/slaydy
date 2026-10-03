@@ -404,6 +404,8 @@
   /* ------------------------------------------------------------- overview */
   let ovSelected = 0;                 // keyboard cursor over the thumbnail grid
   let ovJumpBuf = "", ovJumpTimer;    // typed slide number, e.g. "1" "4" → 14
+  let ovPicking = false;              // select mode: thumbnails toggle instead of open
+  const ovPicked = new Set();         // picked slide elements (survive a reorder)
 
   function toggleOverview(force) {
     overviewOpen = force ?? !overviewOpen;
@@ -416,6 +418,7 @@
       requestAnimationFrame(() => ovThumbs()[ovSelected]?.scrollIntoView({ block: "nearest" }));
     } else {
       ovJumpBuf = ""; clearTimeout(ovJumpTimer);
+      setPicking(false);
     }
     fit();
   }
@@ -462,6 +465,7 @@
 
   // returns true when the key was handled (caller preventDefaults)
   function overviewKeydown(e) {
+    if (ovPicking && e.key === " ") { pickSlide(ovSelected); return true; }
     if (/^\d$/.test(e.key)) {
       clearTimeout(ovJumpTimer);
       ovJumpBuf = (ovJumpBuf + e.key).slice(-3);
@@ -480,6 +484,7 @@
       return true;
     }
     if (e.key === "Enter") { toggleOverview(false); show(ovSelected); return true; }
+    if (e.key.toLowerCase() === "s" && !e.metaKey && !e.ctrlKey) { setPicking(!ovPicking); return true; }
     if (e.key === "Home") { ovSelect(0); return true; }
     if (e.key === "End") { ovSelect(slides.length - 1); return true; }
     return false;
@@ -493,11 +498,13 @@
     $("#ov-hint").innerHTML = editing
       ? `<kbd>↑↓←→</kbd> select · <kbd>${KEY.alt}arrows</kbd> reorder · <kbd>Enter</kbd> open`
       : `<kbd>↑↓←→</kbd> select · <kbd>Enter</kbd> open · type a number to jump`;
+    if (ovPicking) $("#ov-hint").innerHTML = `<kbd>Space</kbd> pick · <kbd>↑↓←→</kbd> move · <kbd>S</kbd> done picking`;
+    [...ovPicked].forEach(s => { if (!slides.includes(s)) ovPicked.delete(s); });
     slides.forEach((s, i) => {
       const t = document.createElement("div");
-      t.className = "thumb" + (i === index ? " is-current" : "") + (i === ovSelected ? " is-selected" : "");
+      t.className = "thumb" + (i === index ? " is-current" : "") + (i === ovSelected ? " is-selected" : "") + (ovPicked.has(s) ? " is-picked" : "");
       t.innerHTML =
-        `<div class="thumb__frame"><div class="thumb__scaler"></div></div>` +
+        `<div class="thumb__frame"><div class="thumb__scaler"></div><i class="thumb__check" aria-hidden="true"></i></div>` +
         `<div class="thumb__label"><span>${String(i + 1).padStart(2, "0")}</span><b></b></div>`;
       const clone = s.cloneNode(true);
       // a slide cloned mid-transition keeps is-entering/is-leaving, and the
@@ -507,11 +514,52 @@
       clone.classList.add("is-active");
       $(".thumb__scaler", t).append(clone);
       $(".thumb__label b", t).textContent = slideTitle(s);
-      t.onclick = () => { toggleOverview(false); show(i); };
+      t.onclick = () => {
+        if (ovPicking) { ovSelect(i); pickSlide(i); return; }
+        toggleOverview(false); show(i);
+      };
       grid.append(t);
     });
     requestAnimationFrame(rescaleOverview);
     renderOvCount();
+    renderOvBar();
+  }
+
+  /* select mode: pick slides, then download the deck without them or with
+     only them. A view-layer feature — nothing about it is saved in the deck. */
+  function setPicking(on) {
+    ovPicking = on;
+    if (!on) ovPicked.clear();
+    document.body.classList.toggle("is-picking", on);
+    if (overviewOpen) buildOverview();
+  }
+  function pickSlide(i) {
+    const s = slides[i], t = ovThumbs()[i];
+    if (!s || !t) return;
+    ovPicked.has(s) ? ovPicked.delete(s) : ovPicked.add(s);
+    t.classList.toggle("is-picked", ovPicked.has(s));
+    renderOvBar();
+  }
+  function renderOvBar() {
+    const n = ovPicked.size, all = slides.length;
+    const sel = $("#ov-select");
+    if (sel) { sel.textContent = ovPicking ? "Done" : "Select slides"; sel.classList.toggle("is-on", ovPicking); }
+    $("#ov-bar-count").textContent = n ? `${n} of ${all} selected` : "Click slides to select them";
+    $("#ov-all").textContent = n === all ? "Clear" : "Select all";
+    $("#ov-without").classList.toggle("is-disabled", !n || n === all);
+    $("#ov-only").classList.toggle("is-disabled", !n);
+  }
+  function exportSubset(mode) {
+    const n = ovPicked.size;
+    if (!n || (mode === "without" && n === slides.length)) return;
+    const pick = slides.map(s => ovPicked.has(s));
+    const only = mode === "only";
+    const kept = only ? n : slides.length - n;
+    downloadStandalone({
+      drop: i => pick[i] !== only,
+      suffix: only ? " (selected slides)" : ` (without ${n} slide${n === 1 ? "" : "s"})`,
+      done: `Downloaded a copy with ${kept} slide${kept === 1 ? "" : "s"} — your open deck is unchanged.`
+    });
   }
 
   function rescaleOverview() {
@@ -1127,8 +1175,10 @@
   }
   const validateOptions = () => OPTIONS.forEach(validateOption);
 
-  async function serialize({ inline }) {
+  async function serialize({ inline, drop }) {
     const root = document.documentElement.cloneNode(true);
+    // a subset export: the clone's slides line up with `slides` by index
+    if (drop) root.querySelectorAll(".deck .slide").forEach((s, i) => { if (drop(i)) s.remove(); });
     // an in-flight count-up leaves a mid-animation value in the DOM — the
     // clone must get the pristine text, not the partial number
     const liveCounts = document.querySelectorAll('[data-animate="count"]');
@@ -1238,14 +1288,15 @@
   }
 
   // explicit single-file export: one .html that opens anywhere, no siblings
-  async function downloadStandalone() {
+  async function downloadStandalone({ drop, suffix = "", done } = {}) {
     try {
-      const blob = new Blob([await serialize({ inline: true })], { type: "text/html" });
+      const blob = new Blob([await serialize({ inline: true, drop })], { type: "text/html" });
       const a = document.createElement("a");
       a.href = URL.createObjectURL(blob);
       // name the file after the deck, like standalone.py does
-      a.download = ((document.title || "").replace(/[\\/:*?"<>|]/g, "").trim() || "deck") + ".html";
+      a.download = ((document.title || "").replace(/[\\/:*?"<>|]/g, "").trim() || "deck") + suffix + ".html";
       a.click();
+      if (done) return toast(done);
       const pendingCount = $$("[data-note]").length;
       toast(pendingCount
         ? `Downloaded a copy with your changes — ${pendingCount} change request${pendingCount === 1 ? "" : "s"} still open. Hand this .html back to Claude to have them made.`
@@ -1830,8 +1881,15 @@
           <h2>${escapeHtml(document.title)}</h2>
           <span class="ov-hint" id="ov-hint"></span>
           <span id="ov-count"></span>
+          <button class="ov-btn" id="ov-select" data-tip="Pick slides, then download a copy without them or with only them">Select slides</button>
         </div>
         <div class="overview__grid" id="ov-grid"></div>
+        <div class="ov-bar" id="ov-bar">
+          <span id="ov-bar-count"></span>
+          <button class="ov-btn" id="ov-all">Select all</button>
+          <button class="ov-btn" id="ov-without">Download without selected</button>
+          <button class="ov-btn primary" id="ov-only">Download only selected</button>
+        </div>
       </div>
       <div class="pop-layer" id="pop-layer" data-runtime></div>
       <div class="drawer" id="notes-drawer" data-runtime style="display:none">
@@ -1915,7 +1973,7 @@
     $("#btn-prev").onclick = prev;
     $("#btn-next").onclick = next;
     $("#btn-ov").onclick = () => toggleOverview();
-    $("#btn-single")?.addEventListener("click", downloadStandalone);
+    $("#btn-single")?.addEventListener("click", () => downloadStandalone());
     if (!editing) {
       $("#btn-theme")?.addEventListener("click", cycleTheme);
       $("#btn-presenter").onclick = openPresenter;
@@ -2519,7 +2577,7 @@
       if (e.key === "Escape") {
         if ($("#shortcuts-sheet").style.display !== "none") return toggleShortcuts(false);
         if ($("#pop-layer").innerHTML) return closePopover();
-        if (overviewOpen) return toggleOverview(false);
+        if (overviewOpen) return ovPicking ? setPicking(false) : toggleOverview(false);
         if (editing) return toggleEdit(false);
       }
       if (typing || widget) {
@@ -2672,6 +2730,16 @@
   } else {
     if (params.has("notes")) document.body.classList.add("show-notes");
     mountChrome();
+    $("#ov-select").onclick = () => setPicking(!ovPicking);
+    $("#ov-all").onclick = () => {
+      const all = ovPicked.size === slides.length;
+      ovPicked.clear();
+      if (!all) slides.forEach(s => ovPicked.add(s));
+      if (!ovPicking) { ovPicking = true; document.body.classList.add("is-picking"); }
+      buildOverview();
+    };
+    $("#ov-without").onclick = () => exportSubset("without");
+    $("#ov-only").onclick = () => exportSubset("only");
     bind();
     initStickerDrag();
     fit();

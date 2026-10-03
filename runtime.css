@@ -1408,6 +1408,35 @@ body.is-overview .overview { display: block; }
   border-color: var(--accent);
   box-shadow: 0 0 0 2px var(--accent), 0 14px 34px -14px rgba(0, 0, 0, .7);
 }
+.thumb__check { display: none; }
+.ov-btn {
+  font: 500 12px/1 var(--font-body, system-ui); letter-spacing: .02em; color: rgba(255,255,255,.85);
+  background: rgba(255,255,255,.08); border: 1px solid rgba(255,255,255,.18);
+  border-radius: 8px; padding: 9px 13px; cursor: pointer; white-space: nowrap;
+}
+.ov-btn:hover { background: rgba(255,255,255,.14); color: #fff; }
+.ov-btn.is-on, .ov-btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+.ov-btn.is-disabled { opacity: .35; pointer-events: none; }
+.ov-bar {
+  position: fixed; left: 50%; bottom: 22px; transform: translateX(-50%);
+  display: none; align-items: center; gap: 10px; padding: 10px 12px 10px 18px;
+  background: #17171d; border: 1px solid rgba(255,255,255,.16); border-radius: 12px;
+  box-shadow: 0 18px 40px -12px rgba(0,0,0,.7); z-index: 2;
+}
+.ov-bar span { font: 500 12px/1 var(--font-mono); letter-spacing: .06em; color: rgba(255,255,255,.6); margin-right: 8px; white-space: nowrap; }
+body.is-picking .ov-bar { display: flex; }
+body.is-picking .overview { padding-bottom: 120px; }
+body.is-picking .thumb__frame { opacity: .55; }
+body.is-picking .thumb.is-picked .thumb__frame { opacity: 1; border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent); }
+body.is-picking .thumb__check {
+  display: block; position: absolute; top: 10px; left: 10px; width: 22px; height: 22px;
+  border-radius: 6px; border: 2px solid rgba(255,255,255,.7); background: rgba(0,0,0,.45);
+  z-index: 3; box-sizing: border-box;
+}
+body.is-picking .thumb.is-picked .thumb__check {
+  background: var(--accent) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='3.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M5 12.5l4.5 4.5L19 7.5'/%3E%3C/svg%3E") center / 14px no-repeat;
+  border-color: var(--accent);
+}
 .thumb__scaler {
   position: absolute; top: 0; left: 0;
   width: var(--slide-w); height: var(--slide-h);
