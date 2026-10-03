@@ -30,9 +30,12 @@ Both emit the same shape: slide markup at the top (hand-editable), compacted sty
 runtime appended at the end of `<body>`, a `#standalone-guard` style in `<head>` against
 unstyled flash, images/logo as data: URIs, `data-themes` stripped, `<html data-standalone>`.
 Both exporters prefer pre-minified `runtime.min.js`/`runtime.min.css` built by `build.sh`
-(esbuild via npx; standalone.py checks mtime freshness, the browser can't); without them they
+(esbuild pinned in `build.sh`, output checked smaller than its source before it replaces the tracked
+files, never `rm`'d when esbuild is missing; standalone.py checks mtime freshness, the browser can't); without them they
 fall back to conservative compaction (comments/indent/blank lines only — line-interior
 whitespace is never touched, protecting CSS content strings and JS template HTML).
+Both also escape `</script`, `<!--` and `<script` in the inlined JS (`<\/script`, `<\u0021--`,
+`<\u0073cript`); `--explode` only reverses the first, the others mean the same text.
 `runtime.min.*` are generated artifacts — always rebuild after touching runtime files.
 A no-JS fallback in runtime.css shows the fitted title slide before boot / in Quick Look.
 PDF export: `@page 1280px 720px` verified correct (headless print = 960×540pt, notes

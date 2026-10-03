@@ -165,7 +165,13 @@ def build(deck_path: Path, out_path: Path) -> None:
         if not is_rel(src):
             return m.group(0)
         js = read_asset(folder / src, min_js)
-        js_parts.append(js.replace("</script", "<\\/script"))
+        # three sequences can derail the HTML parser's script-data states
+        # (</script ends it, <!-- followed by <script swallows the real
+        # close tag); each escape is the same text inside a string, regex
+        # or comment, and \u0073 is a valid identifier escape.
+        js_parts.append(js.replace("</script", "<\\/script")
+                          .replace("<!--", "<\\u0021--")
+                          .replace("<script", "<\\u0073cript"))
         return ""
 
     def inline_img(m):
@@ -231,7 +237,8 @@ def explode(src: Path, html: str, out: Path) -> None:
     # any embedded theme blocks (<style data-theme>, added when the deck
     # declares several themes), then one <script> holding the runtime (its
     # own </script instances are escaped as <\/script, so the first real
-    # close tag ends it)
+    # close tag ends it; <!-- and <script are escaped too, left as is in
+    # bundle.js since they mean the same text)
     m = re.search(
         r"<style>([\s\S]*?body\{visibility:visible\}[\s\S]*?)</style>\s*"
         r"((?:<style data-theme=[\s\S]*?</style>\s*)*)"

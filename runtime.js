@@ -392,7 +392,7 @@
   }
   const next = advance;
   const prev = gotoPrev;
-  function syncState() { mainChan?.postMessage({ index, step }); }
+  function syncState() { mainChan?.postMessage({ index, step, count: slides.length }); }
   // public events — the stable hook surface for an install's custom.js
   // (see CUSTOMIZING.md); detail carries live DOM nodes, never clones
   const emit = (name, detail) => deck.dispatchEvent(new CustomEvent("slaydy:" + name, { detail, bubbles: true }));
@@ -1009,7 +1009,10 @@
       if (!isRelSrc(src)) continue;
       // "<\/" is byte-identical inside JS strings/regexes, and keeps the
       // inlined source from terminating its own <script> tag
-      js.push((await fetchAsset(src, minifyJS)).replace(/<\/script/gi, "<\\/script"));
+      // ("<!--" and "<script" are escaped too: together they put the HTML parser in
+      // the double-escaped state, where the real </script> no longer closes)
+      js.push((await fetchAsset(src, minifyJS)).replace(/<\/script/gi, "<\\/script")
+        .replace(/<!--/g, "<\\u0021--").replace(/<script/gi, "<\\u0073cript"));
       s.remove();
     }
     for (const img of [...root.querySelectorAll("img")]) {
@@ -1178,6 +1181,8 @@
       });
     }
     root.removeAttribute("style");
+    root.classList.remove("is-loaded");                   // boot-time cover state, re-derived on open
+    if (!root.classList.length) root.removeAttribute("class");
     root.querySelector("body").className = "";
     return "<!doctype html>\n" + root.outerHTML + "\n";
   }
@@ -1192,6 +1197,9 @@
     // a standalone deck (single file, everything inlined) saves itself as a
     // single file again — no images/ folder, assets stay baked in
     const standalone = document.documentElement.hasAttribute("data-standalone");
+    // a folder handle is no use to a standalone (and file:// pages can't keep
+    // one), so skip the picker and download the single file
+    if (standalone) { await downloadStandalone(); return true; }
     if (window.showDirectoryPicker) {
       try {
         if (!dirHandle) {
@@ -1270,7 +1278,7 @@
     if (!el) return;
     const label = $(".js-save-label", el);
     if (!label) return;
-    if (!window.showDirectoryPicker) { label.textContent = "Download copy"; el.classList.remove("is-status"); return; }
+    if (!window.showDirectoryPicker || document.documentElement.hasAttribute("data-standalone")) { label.textContent = "Download copy"; el.classList.remove("is-status"); return; }
     if (!dirHandle) { label.textContent = "Save…"; el.classList.remove("is-status"); return; }
     el.classList.add("is-status");
     label.textContent = saving || dirty ? "Saving…" : "Saved";
@@ -1897,6 +1905,7 @@
       ${btn({ id: "btn-notes", icon: "notes", label: "Speaker notes", tip: "Add notes for presenter view and printed PDFs" })}
       <span class="tb-sep"></span>
       ${btn({ id: "btn-undo", icon: "undo", cls: "icon-only", key: KEY.cmd + "Z", tip: "Undo" })}
+      ${document.documentElement.hasAttribute("data-standalone") ? "" : btn({ id: "btn-single", icon: "save", label: "Download copy", key: "D", tip: "Download the deck with your changes as one self-contained .html" })}
       <button id="btn-save" class="tb-btn" data-tip="Save changes to this file" aria-label="Save"><svg class="icon"><use href="#i-save"/></svg><span class="js-save-label">Save</span></button>
       <span class="tb-sep"></span>
       ${btn({ id: "btn-done", icon: "check", label: "Done", cls: "primary", tip: "Exit edit mode" })}
@@ -1906,11 +1915,11 @@
     $("#btn-prev").onclick = prev;
     $("#btn-next").onclick = next;
     $("#btn-ov").onclick = () => toggleOverview();
+    $("#btn-single")?.addEventListener("click", downloadStandalone);
     if (!editing) {
       $("#btn-theme")?.addEventListener("click", cycleTheme);
       $("#btn-presenter").onclick = openPresenter;
       $("#btn-print").onclick = e => exportPDF(e.currentTarget);
-      $("#btn-single").onclick = downloadStandalone;
       $("#btn-edit").onclick = () => toggleEdit();
       $("#btn-help").onclick = () => toggleShortcuts();
     } else {
@@ -2289,6 +2298,7 @@
     const limitH = slide.clientHeight - parseFloat(cs.paddingBottom);
     const limitW = slide.clientWidth - parseFloat(cs.paddingRight);
     const kids = [...slide.children].filter(c =>
+      !/^(absolute|fixed)$/.test(getComputedStyle(c).position) &&
       !c.classList.contains("slide__wash") && !c.classList.contains("slide__chrome") &&
       !c.classList.contains("sticker") && !c.classList.contains("badge") &&
       !c.classList.contains("slide__overflow-badge") &&
@@ -2397,14 +2407,22 @@
         ? `Can't reach the deck window — Safari isolates <code>file://</code> pages from each other, so presenter view can't drive the deck. Open the deck in Chrome, or serve its folder over http.`
         : `Can't reach the deck window. Presenter view is a remote control — keep the deck open in its own window or tab.`;
     };
-    let lastSeen = 0;
+    let lastSeen = 0, staleShown = false;
     chan.onmessage = e => {
       const d = e.data;
       if (typeof d?.index !== "number") return;
       lastSeen = Date.now();
       const changed = d.index !== index || (d.step || 0) !== step;
       index = d.index; step = d.step || 0;
-      if (!synced) { synced = true; alertEl.hidden = true; renderPresenter(); return; }
+      // the presenter's clones come from the DOM it parsed at load, so a
+      // slide added or removed in the deck window needs a reload here
+      const stale = typeof d.count === "number" && d.count !== slides.length;
+      if (stale) {
+        alertEl.hidden = false;
+        alertEl.textContent = "Slides changed in the deck window: reload this window.";
+      } else if (staleShown) alertEl.hidden = true;
+      staleShown = stale;
+      if (!synced) { synced = true; alertEl.hidden = stale ? false : true; renderPresenter(); return; }
       if (!changed) return;                             // heartbeat echo, nothing new
       if (elapsedStart === null) elapsedStart = Date.now();
       renderPresenter();
@@ -2678,4 +2696,13 @@
     document.fonts?.ready?.then(measureAll);
     initMainChannel();
   }
+
+  // lift the loading cover (runtime.css "loading cover") once the theme, its
+  // fonts and every extension script have landed, so the first thing seen is
+  // the finished deck, not the runtime defaults restyling underneath. The
+  // 2.5s timeout keeps a slow or blocked font host from holding the deck back.
+  const settled = [document.readyState === "complete" ? 0 : new Promise(r => addEventListener("load", r, { once: true })),
+                   document.fonts?.ready];
+  Promise.race([Promise.all(settled), new Promise(r => setTimeout(r, 2500))])
+    .then(() => requestAnimationFrame(() => document.documentElement.classList.add("is-loaded")));
 })();

@@ -135,6 +135,36 @@ body:not(.is-ready) .deck {
   border-radius: 0; box-shadow: none;
 }
 
+/* loading cover. Where scripts run, hold the page behind a plain cover with a
+   thin progress bar until the runtime adds html.is-loaded (theme, fonts and
+   extensions settled), so a brand never shows as the default theme first.
+   (scripting: enabled) keeps it out of Quick Look and preview panes, which
+   keep the cover-slide preview above. If the runtime itself never runs, the
+   cover lifts on its own after 6s rather than hiding the deck for good. */
+@media screen and (scripting: enabled) {
+  html::before {
+    content: ""; position: fixed; inset: 0; z-index: 1000;
+    background: var(--bg); pointer-events: none;
+    transition: opacity .2s linear;
+  }
+  html.is-loaded::before { opacity: 0; }
+  html:not(.is-loaded)::before { animation: cover-lift 0s linear 6s forwards; }
+  html:not(.is-loaded)::after {
+    content: ""; position: fixed; left: 50%; top: 50%; z-index: 1001;
+    width: min(220px, 40vw); height: 3px; margin: -1px 0 0 calc(min(220px, 40vw) / -2);
+    border-radius: 3px; pointer-events: none; opacity: 0;
+    background: linear-gradient(var(--accent), var(--accent)) no-repeat -60% 0 / 40% 100%, var(--faint);
+    /* a fast load never shows the bar; only a slow one does */
+    animation: cover-bar 1.1s var(--ease) .25s infinite, cover-in .2s linear .25s forwards, cover-lift 0s linear 6s forwards;
+  }
+}
+@keyframes cover-bar { from { background-position: -60% 0, 0 0; } to { background-position: 160% 0, 0 0; } }
+@keyframes cover-in { to { opacity: 1; } }
+@keyframes cover-lift { to { opacity: 0; visibility: hidden; } }
+@media (prefers-reduced-motion: reduce) {
+  html:not(.is-loaded)::after { background: var(--accent); animation: cover-in .2s linear .25s forwards, cover-lift 0s linear 6s forwards; }
+}
+
 /* subtle entrance stagger — "rise" transition only */
 @keyframes rise {
   from { opacity: 0; transform: translateY(14px); }
@@ -163,8 +193,8 @@ body:not(.is-editing):not(.is-overview) .slide[data-tx="rise"].is-active > *:not
    cross-fade of two identical backgrounds dips to ~75% coverage at its
    midpoint and reads as a blink; fading one layer over an opaque twin is
    pixel-identical throughout, so between same-surface slides only the
-   content appears to change. Wipe instead clips the entering slide in on
-   top of a still, fully-opaque leaving slide — same property, no fade.
+   content appears to change. Wipe instead clips the leaving slide away
+   (keyframes), revealing the entering slide beneath — same property, no fade.
    ========================================================================= */
 /* fade: a pure dissolve — the old slide fades away over the new one */
 .slide[data-tx="fade"].is-leaving { transition: opacity var(--tx-dur) var(--ease); opacity: 0; }
@@ -199,19 +229,34 @@ body[data-dir="back"] .slide[data-tx="push"].is-entering > *:not(.slide__chrome)
 }
 body[data-dir="back"] .slide[data-tx="push"].is-leaving > *:not(.slide__chrome):not(.slide__wash) { transform: translateX(var(--slide-w)); }
 
-/* wipe: the entering slide clips in on top — the leaving slide stays below, still and opaque */
-.slide[data-tx="wipe"].is-entering { clip-path: inset(0 0 0 100%); }
-body[data-dir="back"] .slide[data-tx="wipe"].is-entering { clip-path: inset(0 100% 0 0); }
-.slide[data-tx="wipe"].is-entering.is-active { transition: clip-path var(--tx-dur) var(--ease); clip-path: inset(0 0 0 0); }
-.slide[data-tx="wipe"].is-leaving { opacity: 1; z-index: 1; }
+/* wipe: the leaving slide clips away (boundary travels right to left, new content on the right).
+   The entering slide is never clipped and stays at z-index 2, directly above whatever the theme
+   painted, so translucent slide backgrounds composite against the backdrop, not the old slide.
+   A keyframes animation, not a transition: show() sets [data-tx] and adds .is-leaving in the
+   same tick, so a clip-path transition would have no rendered from-state. opacity: 1 is kept
+   because .is-leaving only restores visibility; the slide has just lost the .is-active that
+   held opacity up. Thumbnails and print clear clip-path and animation (see those blocks). */
+@keyframes wipe-out      { from { clip-path: inset(0 0 0 0); } to { clip-path: inset(0 100% 0 0); } }
+@keyframes wipe-out-back { from { clip-path: inset(0 0 0 0); } to { clip-path: inset(0 0 0 100%); } }
+.slide[data-tx="wipe"].is-leaving {
+  opacity: 1;
+  animation: wipe-out var(--tx-dur) var(--ease) both;
+}
+body[data-dir="back"] .slide[data-tx="wipe"].is-leaving { animation-name: wipe-out-back; }
 
 /* =========================================================================
    Progressive reveal — data-reveal on a container marks its direct children
    as steps ([data-step], derived); a lone element becomes one step itself.
+
+   --step-dim sets how an un-revealed step looks. 0 (default): hidden, and it rises 10px
+   into place. A nonzero value (e.g. .28): the step sits dimmed at that opacity with no rise,
+   so the audience still sees the shape of the list and that more is coming. A static contrast
+   step survives projection and video compression better than a 10px rise. A theme sets it on
+   :root or .slide, e.g. --step-dim: .28.
    ========================================================================= */
 body:not(.is-editing):not(.is-overview) [data-step] {
-  opacity: 0;
-  transform: translateY(10px);
+  opacity: var(--step-dim, 0);
+  transform: translateY(calc(10px * (1 - min(1, var(--step-dim, 0) * 1000))));
   transition: opacity .3s var(--ease), transform .3s var(--ease);
 }
 body:not(.is-editing):not(.is-overview) [data-step].is-revealed { opacity: 1; transform: none; }
@@ -1373,6 +1418,7 @@ body.is-overview .overview { display: block; }
   transform: none !important; transition: none !important;
   border-radius: 0;
 }
+.thumb__scaler .slide { clip-path: none !important; animation: none !important; }
 .thumb__scaler .slide * { animation: none !important; }
 /* thumbnails (overview + presenter) are their own scale context: ignore the
    live slide's data-fit zoom and overflow badge, both already baked into scale */
@@ -1557,7 +1603,6 @@ body.is-black::after { content: ""; position: fixed; inset: 0; background: #000;
   .badge, .slide__overflow-badge, .media-hover, .handle, .slide__placeholder-note { display: none !important; }
   .media[data-grain]::after { display: none !important; }   /* grain is screen-only — printed, it rasterizes huge */
   .slide { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-  .slide[data-fit] > * { zoom: 1 !important; }
   [data-step] { opacity: 1 !important; transform: none !important; }
   * {
     animation: none !important; transition: none !important;

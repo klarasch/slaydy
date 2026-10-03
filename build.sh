@@ -36,18 +36,45 @@ esac
 
 # Real minification for the single-file export. The exporters (standalone.py
 # and the runtime's Single-file button) prefer runtime.min.* when present and
-# fresh; without esbuild they fall back to conservative compaction.
-if command -v esbuild >/dev/null 2>&1; then ESBUILD=esbuild
-elif command -v npx >/dev/null 2>&1; then ESBUILD="npx --yes esbuild"
-else ESBUILD=""; fi
-if [ -n "$ESBUILD" ]; then
-  $ESBUILD runtime.js  --minify --outfile=runtime.min.js  --log-level=warning
-  $ESBUILD runtime.css --minify --outfile=runtime.min.css --log-level=warning
+# fresh; without them they fall back to conservative compaction.
+# runtime.min.* are tracked (take-update.sh's manifest lists them), so:
+#   - an esbuild already on PATH is used first, else a pinned npx one;
+#   - output goes to a temp dir and is checked smaller than its source before
+#     it replaces anything, a copy-through shim must not become a fake .min;
+#   - on any failure the existing .min files are left untouched.
+ESBUILD_VERSION="0.28.2"
+# Minifying is an optimisation, never a requirement: whatever goes wrong here
+# (no esbuild, registry blocked, a shim, SLAYDY_MINIFY=0) the build warns,
+# leaves the tracked .min files as they are, and carries on.
+minify() {
+  [ "${SLAYDY_MINIFY:-1}" = "0" ] && { echo "minify: skipped (SLAYDY_MINIFY=0)"; return 0; }
+  local ESBUILD MINTMP f m
+  # shipped .min files newer than their sources are current: nothing to do, no esbuild needed
+  if [ runtime.min.js -nt runtime.js ] && [ runtime.min.css -nt runtime.css ]; then
+    echo "minify: runtime.min.* are up to date, nothing to do"; return 0
+  fi
+  if command -v esbuild >/dev/null 2>&1; then ESBUILD=esbuild      # already installed: no network
+  elif command -v npx >/dev/null 2>&1; then ESBUILD="npx --yes --prefer-offline esbuild@$ESBUILD_VERSION"
+  else echo "warning: no esbuild or npx — skipping minification, existing runtime.min.* left as they are" >&2; return 0; fi
+  MINTMP="$(mktemp -d)"
+  for f in runtime.js runtime.css; do
+    m="${f%.*}.min.${f##*.}"
+    if ! $ESBUILD "$f" --minify --outfile="$MINTMP/$m" --log-level=warning </dev/null; then
+      echo "warning: esbuild failed (offline or blocked registry?) — skipping minification, existing runtime.min.* left as they are" >&2
+      rm -rf "$MINTMP"; return 0
+    fi
+    # a copy-through shim would make a fake .min that the exporters then prefer
+    if [ ! -s "$MINTMP/$m" ] || [ "$(wc -c < "$MINTMP/$m")" -ge "$(wc -c < "$f")" ]; then
+      echo "warning: $m is not smaller than $f (shim or broken esbuild) — skipping minification, existing runtime.min.* left as they are" >&2
+      rm -rf "$MINTMP"; return 0
+    fi
+  done
+  cp "$MINTMP/runtime.min.js" runtime.min.js
+  cp "$MINTMP/runtime.min.css" runtime.min.css
+  rm -rf "$MINTMP"
   echo "minified: runtime.min.js ($(du -k runtime.min.js | cut -f1)K) runtime.min.css ($(du -k runtime.min.css | cut -f1)K)"
-else
-  echo "warning: esbuild unavailable — no runtime.min.*; exports fall back to compaction"
-  rm -f runtime.min.js runtime.min.css
-fi
+}
+minify
 
 OUT="dist/$NAME"
 rm -rf "$OUT"
