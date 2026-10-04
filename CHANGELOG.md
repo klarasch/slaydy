@@ -49,7 +49,9 @@ way, and an error inside the lint never fails a build. `standalone.py --lint dec
 and §5 tell Claude to clear the `fix` lines before handing a deck over.
 
 **Forks:** check. A layout a fork adds is known to the lint as soon as its `.slide--<name>` rule
-is in a stylesheet the deck links, and it gets no budget checks. A brand whose voice file allows
+is in a stylesheet the deck links, and it gets no budget checks. An install with its own
+`skeleton.html` is not held to the stock shell: its wiring, and any inline `<style>` or
+`<script>` the skeleton carries, are accepted as they are. A brand whose voice file allows
 something the lint flags (a separator character, say) should say in `themes/<name>.md` that the
 line is expected.
 

@@ -221,17 +221,26 @@ def lint(html: str, folder: Path) -> list[tuple[str, str]]:
         return [("fix", 'no <div class="stage"><div class="deck"> wrapper — copy the deck skeleton exactly (LAYOUTS.md)')]
     sheets = [n.attrs.get("href", "") for n in every if n.tag == "link" and n.attrs.get("rel") == "stylesheet"]
     local = [h for h in sheets if is_rel(h)]
-    theme = next((n.attrs.get("href") for n in every if n.tag == "link" and n.attrs.get("id") == "theme"), None)
-    if not theme:
-        fix('no <link rel="stylesheet" … id="theme"> — copy the deck skeleton exactly (LAYOUTS.md)')
-    elif local and local[0] != theme and local.index(theme) < next((i for i, h in enumerate(local) if "runtime" in h or "bundle" in h), 0):
-        fix("the theme stylesheet is linked before runtime.css — runtime.css comes first")
-    if not any(n.tag == "script" and re.search(r"(runtime|bundle)[\w.]*\.js$", n.attrs.get("src", "")) for n in every):
-        fix('no <script src="runtime.js"> at the end of <body> — copy the deck skeleton exactly (LAYOUTS.md)')
+    # an install's own skeleton.html is the authority on its wiring: with one beside this
+    # script the stock shell is not assumed, and whatever blocks it carries are its own
+    skeleton = Path(__file__).resolve().parent / "skeleton.html"
+    skel = " ".join(skeleton.read_text(encoding="utf-8", errors="ignore").split()) if skeleton.is_file() else ""
+    if not skel:
+        theme = next((n.attrs.get("href") for n in every if n.tag == "link" and n.attrs.get("id") == "theme"), None)
+        if not theme:
+            fix('no <link rel="stylesheet" … id="theme"> — copy the deck skeleton exactly (LAYOUTS.md)')
+        elif local and local[0] != theme and local.index(theme) < next((i for i, h in enumerate(local) if "runtime" in h or "bundle" in h), 0):
+            fix("the theme stylesheet is linked before runtime.css — runtime.css comes first")
+        if not any(n.tag == "script" and re.search(r"(runtime|bundle)[\w.]*\.js$", n.attrs.get("src", "")) for n in every):
+            fix('no <script src="runtime.js"> at the end of <body> — copy the deck skeleton exactly (LAYOUTS.md)')
     for n in every:
-        if n.tag == "style" and "data-deck" not in n.attrs and not {"id", "data-theme"} & set(n.attrs):
+        if n.tag not in ("style", "script") or "data-deck" in n.attrs:
+            continue
+        if skel and " ".join(n.text().split()) in skel:
+            continue
+        if n.tag == "style" and not {"id", "data-theme"} & set(n.attrs):
             fix("a <style> block without data-deck — decks carry no CSS of their own (SKILL.md §10)")
-        if n.tag == "script" and "src" not in n.attrs and "data-deck" not in n.attrs:
+        if n.tag == "script" and "src" not in n.attrs:
             fix("an inline <script> without data-deck — decks carry no JavaScript of their own (SKILL.md §10)")
     css = ""
     for h in local:
