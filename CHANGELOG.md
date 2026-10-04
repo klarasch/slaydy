@@ -14,6 +14,43 @@ Tags on an entry: **runtime** (runtime.*), **docs** (the contract docs), **skele
 
 ## 2026-10-04
 
+### `C` copies the current slide as a PNG
+**runtime** — A single-key shortcut for the Copy slide as PNG item; listed in the Export menu and
+the `?` sheet. Ignored with Cmd/Ctrl/Alt held and while typing.
+
+**Forks:** `C` is now taken by the runtime. Rebind it if a brand extension uses it.
+
+### Copy or download the current slide as a PNG; Export menu
+**runtime**
+- The toolbar's "Export PDF" button is now "Export" and opens a small menu: PDF (the `P` key still
+  goes straight to it), Copy slide as PNG, Download slide as PNG.
+- The slide is cloned into an SVG `<foreignObject>`, drawn to a canvas at 2x (2560x1440) and encoded.
+  The page's CSS (including web fonts and images, as data: URIs) travels with it; `html`/`body`/`:root`
+  selectors are retargeted at wrapper divs carrying the same attributes, so themes and `data-theme`
+  keep working. Steps are shown revealed, entrance animations are off, editing chrome is dropped.
+- Needs to fetch fonts and images: works from a server and from a standalone file. A deck opened
+  from `file://` with external assets gets a toast listing what could not be included.
+- Chromium first; Safari renders foreignObject less faithfully.
+
+**Forks:** nothing to port. A fork that overrides `#btn-print` or relabels "Export PDF" should check
+it. Styles that depend on selectors other than `html`, `body`, `:root` or the slide's own ancestors
+(`.deck`) will not apply inside the image.
+
+### Slide-options dropdowns get their own chevron
+**runtime** — `.opt-select` showed the native chevron flush against the right border. It now draws
+its own chevron with right padding so the label cannot run under it.
+
+**Forks:** drop any `select` chevron override in the slide-options panel.
+
+### Overflow guard measures with bounding rects
+**runtime**
+- `overflows()` used `offsetTop`/`offsetHeight`, which current Chrome reports in the element's own
+  zoomed units, so the `data-fit` zoom cancelled itself out and slides that overflowed slightly were
+  always shrunk to 0.8 and flagged "Too much text". It now uses `getBoundingClientRect()` divided by
+  the stage scale.
+
+**Forks:** drop any workaround for the shrink step not working.
+
 ### Sticker snapping, behind-text layer, grouped Slide options — `87c77cd`
 **runtime, docs, attribute**
 - Dragging a sticker snaps its edges and centre to the slide's `--pad` margins and centre lines;
