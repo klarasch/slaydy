@@ -2761,9 +2761,15 @@
       !c.classList.contains("slide__overflow-badge") &&
       !(c.tagName === "ASIDE" && c.classList.contains("notes")));
     if (!kids.length) return false;
-    const last = kids[kids.length - 1];
-    const vOverflow = last.offsetTop + last.offsetHeight > limitH + 1;
-    const hOverflow = kids.some(c => c.offsetLeft + c.offsetWidth > limitW + 1);
+    // offsetTop/Height/Left/Width come back in the element's own zoomed units in
+    // current Chrome, so the data-fit zoom would cancel itself out. Measure
+    // with bounding rects instead, un-scaled by the stage's transform.
+    const sr = slide.getBoundingClientRect();
+    const k = sr.width / slide.offsetWidth || 1;
+    const bottom = c => (c.getBoundingClientRect().bottom - sr.top) / k - slide.clientTop;
+    const right = c => (c.getBoundingClientRect().right - sr.left) / k - slide.clientLeft;
+    const vOverflow = bottom(kids[kids.length - 1]) > limitH + 1;
+    const hOverflow = kids.some(c => right(c) > limitW + 1);
     return vOverflow || hOverflow;
   }
   function measureOverflow(slide) {

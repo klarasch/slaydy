@@ -14,6 +14,15 @@ Tags on an entry: **runtime** (runtime.*), **docs** (the contract docs), **skele
 
 ## 2026-10-04
 
+### Overflow guard measures with bounding rects
+**runtime**
+- `overflows()` used `offsetTop`/`offsetHeight`, which current Chrome reports in the element's own
+  zoomed units, so the `data-fit` zoom cancelled itself out and slides that overflowed slightly were
+  always shrunk to 0.8 and flagged "Too much text". It now uses `getBoundingClientRect()` divided by
+  the stage scale.
+
+**Forks:** drop any workaround for the shrink step not working.
+
 ### Sticker snapping, behind-text layer, grouped Slide options — `87c77cd`
 **runtime, docs, attribute**
 - Dragging a sticker snaps its edges and centre to the slide's `--pad` margins and centre lines;
