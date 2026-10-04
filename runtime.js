@@ -2978,11 +2978,12 @@
         </div>
         <div class="presenter__foot">
           <b id="pv-elapsed">00:00</b><span>elapsed</span>
+          <span class="presenter__restart" id="pv-restart"><button type="button" id="pv-restart-btn">Restart</button><span class="presenter__confirm" hidden>From slide 1? <button type="button" data-yes>Yes</button><button type="button" data-no>Cancel</button></span></span>
           <span class="presenter__spacer"></span>
           <b id="pv-count" class="presenter__count"></b>
           <span class="presenter__spacer"></span>
           <span id="pv-clock"></span>
-          <span class="presenter__keys"><kbd>→</kbd><span>next</span><kbd>R</kbd><span>reset</span><kbd>B</kbd><span>black</span></span>
+          <span class="presenter__keys"><kbd>→</kbd><span>next</span><kbd>R</kbd><span>reset timer</span><kbd>⇧R</kbd><span>restart</span><kbd>B</kbd><span>black</span></span>
         </div>
       </div>`);
   }
@@ -3020,7 +3021,7 @@
   function initPresenter() {
     document.body.classList.add("is-presenter");
     mountPresenterUI();
-    let elapsedStart = null, synced = false;
+    let elapsedStart = null, synced = false, holdClock = false;
     setInterval(() => {
       $("#pv-clock").textContent = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
       $("#pv-elapsed").textContent = elapsedStart ? fmtElapsed(Date.now() - elapsedStart) : "00:00";
@@ -3061,7 +3062,7 @@
       // an added slide, an edited note) and it asks for the current slides
       if (!synced) { synced = true; alertEl.hidden = true; renderPresenter(); return; }
       if (!changed) return;                             // heartbeat echo, nothing new
-      if (elapsedStart === null) elapsedStart = Date.now();
+      if (elapsedStart === null) { if (holdClock) holdClock = false; else elapsedStart = Date.now(); }
       renderPresenter();
     };
     chan.postMessage({ hello: true });
@@ -3078,10 +3079,31 @@
         case "arrowleft": case "pageup": e.preventDefault(); chan.postMessage({ action: "prev" }); break;
         case "home": chan.postMessage({ action: "home" }); break;
         case "end": chan.postMessage({ action: "end" }); break;
-        case "r": elapsedStart = Date.now(); break;
+        case "r": e.shiftKey ? askRestart() : (elapsedStart = Date.now()); break;
         case "b": chan.postMessage({ action: "black" }); break;
       }
     });
+    // Restart goes back to slide 1 and zeroes the clock. It is the one control that
+    // throws away the audience's place mid-talk, so past the opening it asks first
+    // (inline, not a modal: the popup is a remote control, and a dialog would steal
+    // the keys). Before the first click there is nothing to lose, so it just resets.
+    const rs = $("#pv-restart"), rsBtn = $("#pv-restart-btn"), rsAsk = $(".presenter__confirm", rs);
+    let rsTimer;
+    const closeAsk = () => { clearTimeout(rsTimer); rsAsk.hidden = true; rsBtn.hidden = false; };
+    const doRestart = () => {
+      closeAsk(); elapsedStart = null;
+      holdClock = index !== 0 || !!step;     // the echo of the jump to slide 1 isn't the talk starting
+      chan.postMessage({ action: "restart" });
+    };
+    function askRestart() {
+      if (index === 0 && !step) return doRestart();
+      rsBtn.hidden = true; rsAsk.hidden = false;
+      $("[data-yes]", rsAsk).focus();
+      rsTimer = setTimeout(closeAsk, 5000);
+    }
+    rsBtn.onclick = askRestart;
+    $("[data-yes]", rsAsk).onclick = doRestart;
+    $("[data-no]", rsAsk).onclick = closeAsk;
     // clicks mirror the deck: the current-slide frame retreats on its left
     // third and advances elsewhere, and the Next frame always advances
     const curFrame = $("#pv-current").closest(".thumb__frame");
@@ -3125,6 +3147,7 @@
       else if (d?.action === "prev") retreat();
       else if (d?.action === "home") show(0, true, "fwd");
       else if (d?.action === "end") show(slides.length - 1, true, "fwd");
+      else if (d?.action === "restart") { document.body.classList.remove("is-black"); show(0, true, "fwd"); }
       else if (d?.action === "black") document.body.classList.toggle("is-black");
     };
   }

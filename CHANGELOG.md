@@ -14,6 +14,13 @@ Tags on an entry: **runtime** (runtime.*), **docs** (the contract docs), **skele
 
 ## 2026-10-04
 
+### Restart in presenter view
+**runtime**
+- A Restart button (and Shift+R) returns the deck to slide 1 and zeroes the clock, asking first unless it
+  is already at the start. `R` still only resets the timer.
+
+**Forks:** `Shift+R` in presenter view is now taken.
+
 ### Images no longer break in presenter view
 **runtime**
 - Fix: images pasted into a slot or sticker, and SVGs the runtime de-grains at boot, showed as broken

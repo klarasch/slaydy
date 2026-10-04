@@ -1710,6 +1710,12 @@ body.is-black::after { content: ""; position: fixed; inset: 0; background: #000;
 .presenter__foot b { font: 600 34px/1 var(--font-display); letter-spacing: -.02em; color: #f6f5f3; font-variant-numeric: tabular-nums; }
 .presenter__foot .presenter__count { font-size: 22px; }
 .presenter__spacer { flex: 1; }
+.presenter__restart { display: flex; align-items: center; gap: 8px; }
+.presenter__restart button { font: 500 12px/1 var(--font-body); padding: 6px 10px; border-radius: 6px; border: 1px solid rgba(255, 255, 255, .16); background: transparent; color: rgba(246, 245, 243, .75); cursor: pointer; }
+.presenter__restart button:hover, .presenter__restart button:focus-visible { background: rgba(255, 255, 255, .1); color: #f6f5f3; }
+.presenter__restart [data-yes] { background: var(--accent, #ff5a1f); border-color: transparent; color: #fff; }
+.presenter__confirm { display: flex; align-items: center; gap: 8px; white-space: nowrap; }
+.presenter__confirm[hidden], #pv-restart-btn[hidden] { display: none; }
 .presenter__keys { display: flex; align-items: center; gap: 8px; }
 .presenter__keys kbd { font: 500 12px/1 var(--font-mono); padding: 4px 7px; border-radius: 5px; background: rgba(255, 255, 255, .08); color: rgba(246, 245, 243, .7); }
 
