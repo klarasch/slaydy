@@ -14,6 +14,21 @@ Tags on an entry: **runtime** (runtime.*), **docs** (the contract docs), **skele
 
 ## 2026-10-04
 
+### Saving standalone decks
+**runtime, docs**
+- Standalone decks: Save… (Chrome/Edge) now opens the ordinary save dialog, suggests the deck's own name
+  and remembers the last folder; it writes once and keeps nothing, so nothing autosaves and the opened
+  file is only replaced if you pick it and confirm the OS's replace prompt. Other browsers download a
+  copy. Until saved, the button reads "Unsaved changes — Save…" in amber, the first edit shows a one-time
+  "Changes aren't saved yet" toast with a Save… action, and leaving edit mode repeats it. A download also
+  clears the unsaved state. The edit bar now has one save button; the duplicate Download copy there is gone
+  (the main bar's Download copy and `D` remain).
+- Fix (folder decks too): an edit made while an autosave was writing was marked saved; it now stays dirty
+  and saves again. A failed background folder write no longer triggers an unasked download. The fallback
+  download is named after the deck instead of `deck-edited.html`.
+
+**Forks:** Nothing required, unless you reworded the "Download copy" lines in `SKILL.fork.md`.
+
 ### Sticker guides to other objects
 **runtime**
 - Dragging a sticker now also snaps to the edges and centre of other stickers, and to the edges of the

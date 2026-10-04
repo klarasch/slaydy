@@ -214,15 +214,14 @@ genuinely unavailable, say so and point at the deck's **Download copy** toolbar 
 **Hand off in four lines, no more.** The last line is the deck's tl;dr, not a bare key list —
 in 2–4 sentences, adapted to your own phrasing: it opens in any browser and stays editable;
 press E (or click Edit) to change any text, ? shows every shortcut, P makes a PDF; edits live
-only in that browser tab until they press D — "Download copy" — which saves an updated copy of
-the file.
+only in that browser tab until they save: in Chrome, Save… (a normal save dialog; nothing autosaves), or D — "Download copy" — which downloads an updated copy.
 
 ```
 Deck: ./q3-platform-review/Q3 Platform Review.html — 18 slides, one file. Open it (Chrome), send it as is.
 Source: ./q3-platform-review/deck.html — I edit this for revisions; you don't need to open it.
 It opens in any browser and stays editable — press E (or click Edit) to change any text, ? shows
-every shortcut, P makes a PDF. Edits live in that tab until you press D ("Download copy"), which
-saves an updated copy of the file.
+every shortcut, P makes a PDF. Edits live in that tab until you save — Save… (Chrome: pick this
+file once and it saves over itself) or D ("Download copy").
 ```
 
 When no folder outlives the session (chat), skip the Source line — the workspace is in `/tmp`

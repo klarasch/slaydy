@@ -1163,6 +1163,8 @@ html:fullscreen body.is-idle { cursor: none; }
 .tb-btn.primary .icon { stroke: var(--accent-fg); }
 .tb-btn.is-status { cursor: default; color: rgba(246, 245, 243, .55); }
 .tb-btn.is-status:hover { background: none; }
+.tb-btn.is-warn { color: #ffb020; }
+.tb-btn.is-warn .icon { color: #ffb020; }
 .tb-count {
   font: 500 13px/1 var(--font-mono); font-variant-numeric: tabular-nums;
   min-width: 66px; text-align: center; color: rgba(246, 245, 243, .7);
@@ -1338,6 +1340,7 @@ html:fullscreen body.is-idle { cursor: none; }
 }
 .menu-item:hover, .menu-item:focus-visible { background: rgba(255, 255, 255, .08); outline: none; }
 .menu-item .icon { width: 16px; height: 16px; opacity: .7; }
+.js-save-label { max-width: 190px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .menu-item kbd { margin-left: auto; opacity: .45; font: 500 11px/1 var(--font-body); }
 .btn {
   height: 34px; padding: 0 14px; border-radius: 9px; border: 1px solid rgba(255, 255, 255, .14);

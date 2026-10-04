@@ -669,10 +669,10 @@
     if (!editing) { closePopover(); closePicker(); }
     if (editing) {
       toast(`Edit mode — click any text to change it. ${KEY.cmd}V pastes an image onto the slide.`);
-    } else if (document.documentElement.hasAttribute("data-standalone") && dirty && !dirHandle) {
+    } else if (document.documentElement.hasAttribute("data-standalone") && dirty && !hasTarget()) {
       // standalone + unsaved + no folder handle: the edits only exist in this
       // tab. Replaces the plain "Edit mode off" toast — never both.
-      toast("Your edits live only in this tab — Download copy saves an updated file.", { key: "D" });
+      toast(`Your edits are not saved — they live only in this tab. Press E, then ${window.showSaveFilePicker ? "Save…" : "Download copy"} to keep them.`, { duration: 9000 });
     } else {
       toast("Edit mode off");
     }
@@ -1567,13 +1567,40 @@
     r.readAsDataURL(blob);
   });
 
+  // A standalone deck is saved with the ordinary save dialog, one shot per click: no handle is
+  // kept and nothing autosaves. A page can't remember a file between sessions, so a "saves
+  // itself" state would only be true until the tab closed. The dialog's own replace
+  // confirmation is what guards overwriting a file someone received.
+  async function saveAsFile() {
+    const h = await showSaveFilePicker({
+      suggestedName: deckFileName(), id: "slaydy-save", startIn: "documents",
+      types: [{ description: "HTML deck", accept: { "text/html": [".html"] } }],
+    });
+    const w = await h.createWritable();
+    await w.write(await serialize({ inline: true }));   // pending images are inlined here, so they stay pending
+    await w.close();
+    return h.name;
+  }
+
   async function save() {
     // a standalone deck (single file, everything inlined) saves itself as a
     // single file again — no images/ folder, assets stay baked in
     const standalone = document.documentElement.hasAttribute("data-standalone");
-    // a folder handle is no use to a standalone (and file:// pages can't keep
-    // one), so skip the picker and download the single file
-    if (standalone) { await downloadStandalone(); return true; }
+    // a folder handle is no use to a standalone: it saves through the save dialog
+    // (Safari, Firefox: a download)
+    if (standalone) {
+      if (!window.showSaveFilePicker) { await downloadStandalone(); return true; }
+      try {
+        const name = await saveAsFile();
+        toast(`Saved as ${name}.`);
+        return true;
+      } catch (err) {
+        if (err.name === "AbortError") return false;
+        console.warn(err);
+        toast("Couldn't write that file. Try another location, or use Download copy.");
+        return false;
+      }
+    }
     if (window.showDirectoryPicker) {
       try {
         if (!dirHandle) {
@@ -1599,17 +1626,22 @@
       } catch (err) {
         if (err.name === "AbortError") return false;
         console.warn(err);
+        if (dirHandle) { toast("Couldn't write to the folder — your edits are still in this tab. Use Download copy to keep them."); return false; }   // never download unasked from a background save
         toast("Folder write unavailable — falling back to a standalone download.");
       }
     }
     const blob = new Blob([await serialize({ inline: true })], { type: "text/html" });
     const a = document.createElement("a");
     a.href = URL.createObjectURL(blob);
-    a.download = "deck-edited.html";
+    a.download = deckFileName();
     a.click();
     toast("Downloaded a self-contained copy — runtime, theme and images baked in.");
     return true;
   }
+
+  // named after the deck, like standalone.py does
+  const deckFileName = (suffix = "") =>
+    ((document.title || "").replace(/[\\/:*?"<>|]/g, "").trim() || "deck") + suffix + ".html";
 
   // explicit single-file export: one .html that opens anywhere, no siblings
   async function downloadStandalone({ drop, suffix = "", done } = {}) {
@@ -1617,9 +1649,9 @@
       const blob = new Blob([await serialize({ inline: true, drop })], { type: "text/html" });
       const a = document.createElement("a");
       a.href = URL.createObjectURL(blob);
-      // name the file after the deck, like standalone.py does
-      a.download = ((document.title || "").replace(/[\\/:*?"<>|]/g, "").trim() || "deck") + suffix + ".html";
+      a.download = deckFileName(suffix);
       a.click();
+      if (!drop && !hasTarget()) { dirty = false; updateSaveUI(); }   // the changes are now in a file
       if (done) return toast(done);
       const pendingCount = $$("[data-note]").length;
       toast(pendingCount
@@ -1633,23 +1665,36 @@
 
   /* -------------------------------------------------------------- autosave */
   let dirty = false, saving = false;
+  const hasTarget = () => !!dirHandle;   // a folder being autosaved into
+  const canSaveInPlace = () => document.documentElement.hasAttribute("data-standalone") ? !!window.showSaveFilePicker : !!window.showDirectoryPicker;
   const scheduleAutosave = debounce(async () => {
-    if (!dirHandle || saving) return;
+    if (!hasTarget() || saving) return;
+    const v = deckVersion;
     saving = true; updateSaveUI();
     const ok = await save();
     saving = false;
-    if (ok) dirty = false;
+    // an edit made while the write was in flight isn't in the file: stay dirty and write again
+    if (ok && v === deckVersion) dirty = false;
     updateSaveUI();
+    if (ok && v !== deckVersion) scheduleAutosave();
   }, 1500);
 
   let deckVersion = 0;            // bumped on every edit; the presenter window refetches the deck when it changes
   const deckSession = Math.random().toString(36).slice(2);   // version restarts at 0 on reload; the session id keeps a reloaded deck distinct
   const deckV = () => deckSession + ":" + deckVersion;
+  let nudgedSave = false;
   function markDirty() {
     deckVersion++;
     dirty = true;
+    // nothing is written anywhere yet; say so once, at the first edit, with the way out
+    if (!nudgedSave && !hasTarget() && document.documentElement.hasAttribute("data-standalone") && $("#btn-save")) {
+      nudgedSave = true;
+      toast("Changes aren't saved yet.", window.showSaveFilePicker
+        ? { action: "Save…", onAction: onSaveClick, duration: 9000 }
+        : { action: "Download copy", onAction: () => downloadStandalone(), duration: 9000 });
+    }
     updateSaveUI();
-    if (dirHandle) scheduleAutosave();
+    if (hasTarget()) scheduleAutosave();
   }
 
   function updateSaveUI() {
@@ -1657,16 +1702,18 @@
     if (!el) return;
     const label = $(".js-save-label", el);
     if (!label) return;
-    if (!window.showDirectoryPicker || document.documentElement.hasAttribute("data-standalone")) { label.textContent = "Download copy"; el.classList.remove("is-status"); return; }
-    if (!dirHandle) { label.textContent = "Save…"; el.classList.remove("is-status"); return; }
+    if (!canSaveInPlace()) { label.textContent = "Download copy"; el.classList.remove("is-status", "is-warn"); return; }
+    const unsaved = dirty && !hasTarget();
+    el.classList.toggle("is-warn", unsaved);
+    if (!hasTarget()) { label.textContent = unsaved ? "Unsaved changes — Save…" : "Save…"; el.classList.remove("is-status"); return; }
     el.classList.add("is-status");
     label.textContent = saving || dirty ? "Saving…" : "Saved";
   }
 
   async function onSaveClick() {
-    if (window.showDirectoryPicker && dirHandle) return; // now a passive status, not a button
+    if (hasTarget()) return; // now a passive status, not a button
     const ok = await save();
-    if (ok) { dirty = false; updateSaveUI(); if (dirHandle) toast("Saved. Autosaving from now on."); }
+    if (ok) { dirty = false; updateSaveUI(); if (hasTarget()) toast("Saved. Autosaving from now on."); }
   }
 
   /* ------------------------------------------------------------ undo / redo */
@@ -2318,8 +2365,7 @@
       ${btn({ id: "btn-notes", icon: "notes", label: "Speaker notes", tip: "Add notes for presenter view and printed PDFs" })}
       <span class="tb-sep"></span>
       ${btn({ id: "btn-undo", icon: "undo", cls: "icon-only", key: KEY.cmd + "Z", tip: "Undo" })}
-      ${document.documentElement.hasAttribute("data-standalone") ? "" : btn({ id: "btn-single", icon: "save", label: "Download copy", key: "D", tip: "Download the deck with your changes as one self-contained .html" })}
-      <button id="btn-save" class="tb-btn" data-tip="Save changes to this file" aria-label="Save"><svg class="icon"><use href="#i-save"/></svg><span class="js-save-label">Save</span></button>
+      <button id="btn-save" class="tb-btn" data-tip="Save the deck with your changes — or, where the browser can't save a file, download a copy" aria-label="Save"><svg class="icon"><use href="#i-save"/></svg><span class="js-save-label">Save</span></button>
       <span class="tb-sep"></span>
       ${btn({ id: "btn-done", icon: "check", label: "Done", cls: "primary", tip: "Exit edit mode" })}
     `;
@@ -3356,7 +3402,7 @@
       if (!location.search.includes("notes")) document.body.classList.remove("show-notes");
     });
     addEventListener("beforeunload", e => {
-      if (dirty && !dirHandle) { e.preventDefault(); e.returnValue = ""; }
+      if (dirty && !hasTarget()) { e.preventDefault(); e.returnValue = ""; }
     });
 
     initBulletEditing();
