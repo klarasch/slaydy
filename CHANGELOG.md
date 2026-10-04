@@ -14,6 +14,13 @@ Tags on an entry: **runtime** (runtime.*), **docs** (the contract docs), **skele
 
 ## 2026-10-04
 
+### Blank split halves
+**runtime, docs, attribute**
+- `data-clean` now also works on `slide--split`: it hides the image half (empty slot or picture; the
+  picture stays in the file) so stickers and text boxes can sit there. Options panel: "Blank canvas".
+
+**Forks:** Nothing.
+
 ### Restart in presenter view
 **runtime**
 - A Restart button (and Shift+R) returns the deck to slide 1 and zeroes the clock, asking first unless it

@@ -1471,8 +1471,8 @@
     { name: "data-crop", on: "media", label: "Crop", values: ["cover", "contain"],
       hint: "How an image fills its slot — cover crops to fill, contain letterboxes. Toggled from the image's hover chip." },
     { name: "data-clean", group: "Slide", label: "Blank canvas", type: "flag",
-      when: ".slide--placeholder",
-      hint: "Hide the placeholder prompt and dashed frame — e.g. to stack pasted images on an empty slide." },
+      when: ".slide--placeholder, .slide--split",
+      hint: "Hide the placeholder prompt and dashed frame, or on a split slide the image half — an empty surface for pasted images and text boxes. The image itself is kept." },
   ].forEach(declareOption);
 
   function validateOption(o) {

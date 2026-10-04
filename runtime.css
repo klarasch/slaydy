@@ -1091,6 +1091,10 @@ body.is-editing .pin.is-sel { outline: 2px solid #fff; outline-offset: 2px; }
    stack stickers on — prompt and dashed frame get out of the way */
 .slide--placeholder[data-clean] { border-color: transparent; }
 .slide--placeholder[data-clean] .slide__placeholder-note { display: none; }
+/* ...and on a split slide it blanks the image half: the picture (or its empty
+   slot) is hidden but kept in the file, so the option can be switched back off.
+   The column stays, so the text doesn't jump. */
+.slide--split[data-clean] .split__media { visibility: hidden; pointer-events: none; }
 .slide__placeholder-note {
   display: flex; flex-direction: column; align-items: center; gap: 10px;
   max-width: 32ch;

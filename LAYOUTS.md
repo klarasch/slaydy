@@ -309,7 +309,7 @@ All motion is attribute-driven. Never write CSS or keyframes.
 | `data-sep-text="✦"` | `<body>` or one `<section>` | any string as the separator instead of a named one | any |
 | `data-sep-icon="spark"` | `<body>` or one `<section>` | a sprite icon as the separator — the id without its `i-` prefix | polished, bespoke |
 | `data-crop="cover\|contain"` | `figure.media` | how the image fills its slot: cover crops, contain letterboxes (default: the layout's own — callout media letterbox, the rest cover). Toggled from the image's edit-mode hover chip | any |
-| `data-clean` | `<section class="slide slide--placeholder">` | hide the placeholder prompt and dashed frame — a blank canvas for stacking pasted images, which survive saves on a placeholder | any |
+| `data-clean` | `<section class="slide slide--placeholder">` or `slide--split` | placeholder: hide the prompt and dashed frame — a blank canvas for stacking pasted images, which survive saves on a placeholder. Split: hide the image half (empty slot or picture, which stays in the file) so stickers and text boxes can sit there; the text column does not move | any |
 
 Content-tailored transitions (bespoke tier): stats and big numbers → `zoom`, section
 dividers → `wipe`, quotes → `fade`, full-bleed and full-screen images → `zoom` with
