@@ -14,6 +14,19 @@ Tags on an entry: **runtime** (runtime.*), **docs** (the contract docs), **skele
 
 ## 2026-10-04
 
+### Save falls back to a download where the save dialog is refused
+**runtime, docs**
+- A standalone deck inside a cross-origin frame (an embedded preview) has a save dialog the browser
+  refuses to open. It now offers "Download copy" from the start there, and if the dialog is refused
+  anywhere else the click downloads the copy instead of failing with a toast.
+- The file is built before the chosen target is opened, so a deck that fails to serialise never
+  touches the file being replaced.
+- SKILL.md's hand-off example and the README no longer say a single-file deck saves over itself.
+  Autosave is unchanged: a deck saved into a folder autosaves, a single-file deck never does.
+
+**Forks:** if `SKILL.fork.md` copied the old hand-off line ("pick this file once and it saves over
+itself"), reword it: Save… is a one-shot save dialog.
+
 ### Overflow guard no longer measures slides in motion
 **runtime**
 - Since the switch to bounding rects, a slide measured while its content was still animating in

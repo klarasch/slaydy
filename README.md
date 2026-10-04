@@ -55,7 +55,7 @@ One bar, full words. Hover any button for its shortcut; `?` lists them all.
 - **Request change** — a change request for the next Claude pass, stored on the slide as `data-note` and shown as a chip while editing.
 - **Speaker notes** — a drawer beside the slide; shown in Presenter view.
 - **Undo** — ⌘Z / ⌘⇧Z across every edit, including slide operations.
-- **Save…** — see below. After the first save it autosaves and just shows "Saved".
+- **Save…** — see below. A deck in a folder autosaves after the first save and just shows "Saved"; a single-file deck never autosaves.
 
 ## Saving without base64
 

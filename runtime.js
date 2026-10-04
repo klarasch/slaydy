@@ -675,7 +675,7 @@
     } else if (document.documentElement.hasAttribute("data-standalone") && dirty && !hasTarget()) {
       // standalone + unsaved + no folder handle: the edits only exist in this
       // tab. Replaces the plain "Edit mode off" toast — never both.
-      toast(`Your edits are not saved — they live only in this tab. Press E, then ${window.showSaveFilePicker ? "Save…" : "Download copy"} to keep them.`, { duration: 9000 });
+      toast(`Your edits are not saved — they live only in this tab. Press E, then ${canSaveInPlace() ? "Save…" : "Download copy"} to keep them.`, { duration: 9000 });
     } else {
       toast("Edit mode off");
     }
@@ -1579,8 +1579,10 @@
       suggestedName: deckFileName(), id: "slaydy-save", startIn: "documents",
       types: [{ description: "HTML deck", accept: { "text/html": [".html"] } }],
     });
+    // build the file before opening the target, so a deck that fails to serialise never touches it
+    const html = await serialize({ inline: true });   // pending images are inlined here, so they stay pending
     const w = await h.createWritable();
-    await w.write(await serialize({ inline: true }));   // pending images are inlined here, so they stay pending
+    await w.write(html);
     await w.close();
     return h.name;
   }
@@ -1592,7 +1594,7 @@
     // a folder handle is no use to a standalone: it saves through the save dialog
     // (Safari, Firefox: a download)
     if (standalone) {
-      if (!window.showSaveFilePicker) { await downloadStandalone(); return true; }
+      if (!canSaveInPlace()) { await downloadStandalone(); return true; }
       try {
         const name = await saveAsFile();
         toast(`Saved as ${name}.`);
@@ -1600,7 +1602,14 @@
       } catch (err) {
         if (err.name === "AbortError") return false;
         console.warn(err);
-        toast("Couldn't write that file. Try another location, or use Download copy.");
+        // the dialog itself was refused (an embedded preview, a locked-down browser):
+        // nothing was picked, so a download is what the click can still deliver
+        if (err.name === "SecurityError" || err.name === "NotAllowedError") {
+          pickerBlocked = true; updateSaveUI();
+          await downloadStandalone();
+          return true;
+        }
+        toast("Couldn't write that file. Try another location, or press D to download a copy.");
         return false;
       }
     }
@@ -1669,7 +1678,13 @@
   /* -------------------------------------------------------------- autosave */
   let dirty = false, saving = false;
   const hasTarget = () => !!dirHandle;   // a folder being autosaved into
-  const canSaveInPlace = () => document.documentElement.hasAttribute("data-standalone") ? !!window.showSaveFilePicker : !!window.showDirectoryPicker;
+  // file pickers are refused inside a cross-origin frame (an embedded preview), so a
+  // framed standalone offers the download from the start; pickerBlocked is the same
+  // answer learned the hard way
+  let pickerBlocked = false;
+  const framed = (() => { try { return self !== top && !top.location.href; } catch { return true; } })();
+  const canSaveInPlace = () => document.documentElement.hasAttribute("data-standalone")
+    ? !!window.showSaveFilePicker && !framed && !pickerBlocked : !!window.showDirectoryPicker;
   const scheduleAutosave = debounce(async () => {
     if (!hasTarget() || saving) return;
     const v = deckVersion;
@@ -1692,7 +1707,7 @@
     // nothing is written anywhere yet; say so once, at the first edit, with the way out
     if (!nudgedSave && !hasTarget() && document.documentElement.hasAttribute("data-standalone") && $("#btn-save")) {
       nudgedSave = true;
-      toast("Changes aren't saved yet.", window.showSaveFilePicker
+      toast("Changes aren't saved yet.", canSaveInPlace()
         ? { action: "Save…", onAction: onSaveClick, duration: 9000 }
         : { action: "Download copy", onAction: () => downloadStandalone(), duration: 9000 });
     }
