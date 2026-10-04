@@ -9,3 +9,7 @@ even though the skill isn't installed from this folder.
 - Asked for a deck: follow `SKILL.md` from §1.
 
 Changing the runtime itself rather than using it: `HANDOFF.md`.
+
+Changing the runtime, a contract doc or the skeleton: add an entry to `CHANGELOG.md` in the same
+commit, with a **Forks:** line saying what a fork must do or may delete. `take-update.sh` shows
+forks the entries added since their stamp.

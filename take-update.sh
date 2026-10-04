@@ -104,6 +104,13 @@ if [ -n "$LAST" ] && [ "$check" -eq 0 ]; then
   say "Since you last took ${LAST:0:12}:"
   git -C "$UP" log --oneline "${LAST%-dirty}..HEAD" 2>/dev/null | sed 's/^/    /' || \
     say "    (can't reach that commit — was it rewritten?)"
+  # CHANGELOG.md says what a fork has to do; the one-liners above only say what happened.
+  cl="$(git -C "$UP" diff "${LAST%-dirty}..HEAD" -- CHANGELOG.md 2>/dev/null | awk '/^\+/ && !/^\+\+\+/ {print substr($0,2)}')"
+  if [ -n "$cl" ]; then
+    say ""
+    say "CHANGELOG.md, new since then (read the **Forks:** lines):"
+    printf '%s\n' "$cl" | sed 's/^/    /'
+  fi
   say ""
   say "Read those. Some of them let you DELETE code from the fork: an override"
   say "you carry because upstream lacked a hook, a workaround upstream absorbed."
