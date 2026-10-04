@@ -27,6 +27,13 @@ Text boxes (`.sticker.sticker--text`, 2026-10-04) reuse the sticker machinery: t
 box moves it (a click in the text is a caret), and a floating bar picks one of the deck's type classes (on the `<p>`) and `data-align`. Every sticker rotates
 via a knob below it (`rotate:` in its inline style; resize keeps the opposite corner fixed under rotation). Overview has a select mode that downloads a copy without, or
 with only, the picked slides (`serialize({ drop })`).
+Sticker polish (2026-10-04): dragging snaps a sticker's edges and centre to the slide's `--pad` margins and centre
+lines (Alt = free), drawing `.guide` lines (`data-gen`, never saved). `data-layer="back"` sends a sticker behind the slide's text
+(z-index -1, selected or not; a back sticker is picked by clicking empty slide or
+Alt+click through text, and handles under text can't be grabbed — move it clear first, or nudge with arrows). The sticker bar has backward / forward / behind-text buttons; `[` `]` and the buttons step through
+the stickers of a layer, then across the text. The Slide-options panel groups rows by `group` (collapsible, "N set" badge,
+filter box past 8 rows, Reset all), shows each `hint` as a visible description, renders flags as switches and enums of
+more than three values as a dropdown.
 Single-file export: the standalone file (named after the deck's `<title>`) is the sole user-facing
 deliverable on every surface; `standalone.py --explode` reverses it for base64-free revisions. Two producers, kept in sync by hand: `standalone.py` (run by the skill at generation,
 SKILL.md §3) and the runtime's "Download copy" toolbar button / `inlineAssets()` (post-edit).

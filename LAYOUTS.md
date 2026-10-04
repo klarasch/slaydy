@@ -481,7 +481,7 @@ The paragraph wears one of the deck's own type classes — `display`, `h1`, `h2`
 `body`, `caption`, `eyebrow` — so a box follows the theme and has no font, size or colour of its
 own. `style` carries position and width, plus `rotate` once the user has turned it (stickers
 of either kind can be rotated). `data-shadow="off"` on any sticker drops its shadow; pasted SVG
-stickers start with it off. `data-align` is `center` or `right`; absent means left. Don't
+stickers start with it off. `data-layer="back"` on a sticker puts it behind the slide's text instead of in front (the user's "Behind text" button); absent means in front. `data-align` is `center` or `right`; absent means left. Don't
 write these when generating a deck; use a layout. To change a box's words in a revision, edit
 the `<p>`.
 

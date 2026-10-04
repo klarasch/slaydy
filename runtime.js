@@ -290,6 +290,7 @@
     st.setProperty("--deck-x", Math.round((innerWidth - rightGutter - W * scale) / 2) + "px");
     st.setProperty("--deck-y", Math.round((innerHeight - H * scale) / 2) + "px");
     st.setProperty("--notes-gutter", rightGutter + "px");
+    placeTbxBar();   // the floating sticker bar tracks the sticker across resizes
   }
 
   /* -------------------------------------------------------- progressive reveal */
@@ -394,7 +395,7 @@
   }
   const next = advance;
   const prev = gotoPrev;
-  function syncState() { mainChan?.postMessage({ index, step, count: slides.length, v: deckVersion }); }
+  function syncState() { mainChan?.postMessage({ index, step, v: deckV() }); }
   // public events — the stable hook surface for an install's custom.js
   // (see CUSTOMIZING.md); detail carries live DOM nodes, never clones
   const emit = (name, detail) => deck.dispatchEvent(new CustomEvent("slaydy:" + name, { detail, bubbles: true }));
@@ -463,6 +464,7 @@
     t.draggable = editing;
     if (!editing) return;
     t.addEventListener("dragstart", e => {
+      if (!editing) { e.preventDefault(); return; }   // wiring can outlive an edit-mode toggle
       const s = slides[i];
       const group = ovPicking && ovPicked.has(s) && ovPicked.size > 1 ? slides.filter(x => ovPicked.has(x)) : [s];
       ovDrag = { group };
@@ -499,11 +501,11 @@
     const rest = slides.filter(x => !group.includes(x));
     const before = slides.slice(0, p).filter(x => !group.includes(x)).length;   // non-group slides ahead of the point
     if ([...rest.slice(0, before), ...group, ...rest.slice(before)].every((x, k) => x === slides[k])) return;
-    snapshot();
-    const cur = slides[index];
     const ref = rest[before] || null;                  // first slide that stays behind the group
     const anchor = ref || rest[rest.length - 1];
-    if (!anchor) return;
+    if (!anchor) return;                               // before snapshot: a no-op leaves no undo entry
+    snapshot();
+    const cur = slides[index];
     ref ? group.forEach(g => ref.before(g)) : group.slice().reverse().forEach(g => anchor.after(g));
     decorate();
     index = slides.indexOf(cur);
@@ -517,17 +519,7 @@
 
   function ovMoveSlide(from, to) {
     if (to === from || to < 0 || to >= slides.length) return;
-    snapshot();
-    const s = slides[from], cur = slides[index];
-    to > from ? slides[to].after(s) : slides[to].before(s);
-    decorate();                        // refreshes `slides` + page numbers
-    index = slides.indexOf(cur);       // current slide may have shifted
-    updateCount();
-    replaceHash("#" + (index + 1));
-    ovSelected = to;
-    buildOverview();
-    requestAnimationFrame(() => ovThumbs()[ovSelected]?.scrollIntoView({ block: "nearest" }));
-    syncState();
+    ovMoveGroup([slides[from]], to > from ? to + 1 : to);   // insertion point just past `to` when moving down
   }
 
   // returns true when the key was handled (caller preventDefaults)
@@ -668,6 +660,7 @@
   function toggleEdit(force) {
     editing = force ?? !editing;
     document.body.classList.toggle("is-editing", editing);
+    if (overviewOpen) buildOverview();   // thumbnails' drag wiring and hint depend on editing
     if (!editing) { selectSticker(null); selectPin(null); }   // nothing stays selected (or floating its bar) in view mode
     renderToolbar();
     if (editing) settleCounts();
@@ -726,7 +719,7 @@
   function clipboardSvg(cb) {
     if (!cb || document.activeElement?.isContentEditable || /^(INPUT|TEXTAREA)$/.test(document.activeElement?.tagName)) return "";
     const raw = (cb.getData("image/svg+xml") || cb.getData("text/plain") || "").trim();
-    if (!/^(<\?xml[^>]*>\s*)?(<!--[\s\S]*?-->\s*)*(<!doctype[^>]*>\s*)?<svg[\s>]/i.test(raw)) return "";
+    if (!/^(<\?xml[^>]*>\s*)?(<!--(?:(?!-->)[\s\S])*-->\s*)*(<!doctype[^>]*>\s*)?<svg[\s>]/i.test(raw)) return "";
     const src = /<svg[^>]*\sxmlns\s*=/i.test(raw) ? raw : raw.replace(/<svg/i, '<svg xmlns="http://www.w3.org/2000/svg"');
     const doc = new DOMParser().parseFromString(src, "image/svg+xml");
     const svg = doc.documentElement;
@@ -768,7 +761,10 @@
     selectedSticker = el;
     el?.classList.add("is-sel");
     // a text box left empty was never meant to stay
-    if (prev && prev !== el && prev.classList.contains("sticker--text") && !prev.textContent.trim()) prev.remove();
+    if (prev && prev !== el && prev.classList.contains("sticker--text") && !prev.textContent.trim()) {
+      prev.remove();
+      deckVersion++;   // no snapshot here, so tell the presenter the deck changed
+    }
     syncTbxBar();
   }
 
@@ -811,6 +807,7 @@
     if (!b) return hideTip();
     bar.dataset.kind = b.classList.contains("sticker--text") ? "text" : "image";
     $("[data-a='shadow']", bar).classList.toggle("is-on", b.dataset.shadow !== "off");
+    $("[data-a='behind']", bar).classList.toggle("is-on", b.dataset.layer === "back");
     const del = $("[data-a='delete']", bar), what = bar.dataset.kind === "text" ? "text box" : "image";
     del.dataset.tip = `Delete ${what}`; del.setAttribute("aria-label", `Delete ${what}`);
     if (bar.dataset.kind === "text") $("select", bar).value = tbxStyle(b);
@@ -841,6 +838,8 @@
     const el = e.target.closest("[data-a]"), b = selectedSticker;
     if (!el || !b) return;
     const [a, v] = el.dataset.a.split(":");
+    if (a === "forward" || a === "backward") return layerSticker(a === "forward" ? 1 : -1);
+    if (a === "behind") return toggleBehindText();
     snapshot();
     const set = (k, val, dflt) => val === dflt ? delete b.dataset[k] : b.dataset[k] = val;
     if (a === "align") set("align", v, "left");
@@ -865,6 +864,8 @@
     const clamp = el === selectedPin ? v => Math.max(0, Math.min(100, v)) : v => v;
     if (dx) el.style.left = clamp((parseFloat(el.style.left) || 0) + dx).toFixed(1) + "%";
     if (dy) el.style.top = clamp((parseFloat(el.style.top) || 0) + dy).toFixed(1) + "%";
+    deckVersion++;   // the presenter refetches on a version change, and a nudge may have taken no snapshot
+    placeTbxBar();   // the floating bar follows the sticker
   }
 
   /* --------------------------------------------------- callout pins */
@@ -932,6 +933,98 @@
     measureOverflow(slide);
   }
 
+  /* ------------------------------------------------------- layering */
+  // Stickers have two layers: in front of the slide's text (z-index 4) and
+  // behind it (data-layer="back", z-index -1). Within a layer, DOM order is
+  // the stacking order, so it serializes for free. Forward / backward step
+  // through the stickers of the layer and then across the text, so one pair
+  // of buttons (and [ ]) reaches every position.
+  const stickersOf = (slide, back) =>
+    [...slide.children].filter(c => c.classList.contains("sticker") && (c.dataset.layer === "back") === back);
+  function setLayer(el, back) {
+    const slide = el.parentElement, last = stickersOf(slide, back).pop();   // joins the top of its new layer
+    if (back) el.dataset.layer = "back"; else delete el.dataset.layer;
+    if (last) last.after(el);
+  }
+  function layerSticker(dir) {
+    const el = selectedSticker;
+    if (!editing || !el) return;
+    const back = el.dataset.layer === "back", sibs = stickersOf(el.parentElement, back);
+    const to = sibs[sibs.indexOf(el) + dir];
+    const crosses = !to && (dir < 0 ? !back : back);
+    if (!to && !crosses) return toast(dir > 0 ? "Already on top" : "Already at the back");
+    snapshot();
+    if (to) dir > 0 ? to.after(el) : to.before(el);
+    else {                                           // past the end of its layer: over / under the text
+      const front = stickersOf(el.parentElement, !back);
+      if (dir < 0) { el.dataset.layer = "back"; const l = stickersOf(el.parentElement, true).filter(x => x !== el).pop(); if (l) l.after(el); }
+      else { delete el.dataset.layer; if (front[0]) front[0].before(el); }
+    }
+    syncTbxBar();
+    if (crosses) toast(dir < 0 ? "Behind the text" : "In front of the text");
+  }
+  function toggleBehindText() {
+    const el = selectedSticker;
+    if (!editing || !el) return;
+    snapshot();
+    const back = el.dataset.layer !== "back";
+    setLayer(el, back);
+    syncTbxBar();
+    toast(back ? "Behind the text — Alt+click on text to select it again" : "In front of the text");
+  }
+  // a click on empty slide, or Alt+click through text, selects the back sticker under the pointer
+  function backStickerAt(e) {
+    const slide = e.target.closest(".slide");
+    if (!slide || (e.target.closest("[contenteditable]") && !e.altKey)) return null;
+    const hit = stickersOf(slide, true).reverse().find(b => {
+      const r = b.getBoundingClientRect();
+      return e.clientX >= r.left && e.clientX <= r.right && e.clientY >= r.top && e.clientY <= r.bottom;
+    });
+    if (hit && e.altKey) e.preventDefault();         // no caret under the sticker
+    return hit || null;
+  }
+
+  /* ---------------------------------------------------------- drag guides */
+  // While a sticker is dragged, its edges and centre snap to the slide's
+  // margins (--pad) and centre lines, and the line it snapped to is drawn.
+  // Measured on the rendered box, so a rotated sticker snaps by its visible
+  // bounds. Hold Alt to drag freely. Guide lines are data-gen: never saved.
+  const SNAP_PX = 6;   // canvas pixels
+  function snapToGuides(el, slide, s, free) {
+    if (free) return clearGuides(slide);
+    const pad = parseFloat(getComputedStyle(slide).getPropertyValue("--pad")) || 84;
+    const sr = slide.getBoundingClientRect(), r = el.getBoundingClientRect();
+    // nearest guide within reach wins; each box line (low edge, high edge, centre) may meet any guide
+    const axis = (lo, hi, size) => {
+      let best = null;
+      [[pad, lo], [size - pad, hi], [size / 2, (lo + hi) / 2]].forEach(([g, at]) => {
+        const d = g - at;
+        if (Math.abs(d) <= SNAP_PX && (!best || Math.abs(d) < Math.abs(best.d))) best = { g, d };
+      });
+      return best;
+    };
+    const sx = axis((r.left - sr.left) / s, (r.right - sr.left) / s, W);
+    const sy = axis((r.top - sr.top) / s, (r.bottom - sr.top) / s, H);
+    if (sx) el.style.left = ((parseFloat(el.style.left) || 0) + sx.d / W * 100).toFixed(2) + "%";
+    if (sy) el.style.top = ((parseFloat(el.style.top) || 0) + sy.d / H * 100).toFixed(2) + "%";
+    showGuides(slide, sx?.g, sy?.g);
+  }
+  function showGuides(slide, x, y) {
+    const mk = (axis, pos) => {
+      let g = $(`.guide[data-axis="${axis}"]`, slide);
+      if (pos == null) { g?.remove(); return; }
+      if (!g) {
+        g = document.createElement("i");
+        g.className = "guide"; g.dataset.axis = axis; g.dataset.gen = "";
+        slide.append(g);
+      }
+      g.style[axis === "x" ? "left" : "top"] = pos + "px";
+      g.classList.toggle("is-centre", pos === (axis === "x" ? W : H) / 2);
+    };
+    mk("x", x); mk("y", y);
+  }
+  const clearGuides = slide => $$(".guide", slide).forEach(g => g.remove());
+
   function initStickerDrag() {
     deck.addEventListener("pointerdown", e => {
       if (!editing) return;
@@ -939,7 +1032,7 @@
       const pin = e.target.closest(".pin");
       if (pin) return startPinDrag(pin, e);
       const handle = e.target.closest(".handle");
-      const el = e.target.closest(".sticker");
+      const el = e.target.closest(".sticker") || backStickerAt(e);
       if (!el) { selectSticker(null); selectPin(null); return; }
       const isText = el.classList.contains("sticker--text");
       // a click in a text box's text is a caret, not a drag — the grip moves it
@@ -1015,10 +1108,12 @@
       const move = ev => {
         el.style.left = (start.l + ((ev.clientX - start.x) / s / W) * 100).toFixed(2) + "%";
         el.style.top = (start.t + ((ev.clientY - start.y) / s / H) * 100).toFixed(2) + "%";
+        snapToGuides(el, slide, s, ev.altKey);
         placeTbxBar();
       };
       const up = () => {
         removeEventListener("pointermove", move); removeEventListener("pointerup", up);
+        clearGuides(slide);
         pushSnapshotRaw(preDrag);
       };
       addEventListener("pointermove", move);
@@ -1323,7 +1418,9 @@
   //     values: ["soft", "dense"], hint: "Scrim strength over the gradient." })
   // A declaration with `values` is validated at boot (typos warn instead of
   // failing silently) and gets a control in the edit-mode Slide-options panel
-  // for free; `type: "flag"` renders an on/off toggle there. TRANSIENT is the
+  // for free; `type: "flag"` renders an on/off switch there. `group` files the
+  // row under a collapsible section ("Other" when absent) and `hint` is shown
+  // as the row's (?) tooltip. Enums of more than three values become a dropdown. TRANSIENT is the
   // derived set — window.slaydy.transient.add() still works and is
   // equivalent to declaring { name, derived: true }.
   // "does this slide have one the runtime actually drives?" — the qualifier is
@@ -1352,17 +1449,17 @@
     { name: "data-empty", derived: true },
     { name: "data-title", label: "Title", type: "text" },
     { name: "data-note", label: "Change request", type: "text" },
-    { name: "data-transition", label: "Transition", values: ["fade", "rise", "zoom", "push", "wipe", "none"], hint: "How this slide enters. Default follows the deck." },
-    { name: "data-bare", label: "Bare", type: "flag", hint: "Hide the footer — logo, label, page number." },
-    { name: "data-reveal-all", label: "Reveal at once", type: "flag",
+    { name: "data-transition", group: "Slide", label: "Transition", values: ["fade", "rise", "zoom", "push", "wipe", "none"], hint: "How this slide enters. Default follows the deck." },
+    { name: "data-bare", group: "Slide", label: "Bare", type: "flag", hint: "Hide the footer — logo, label, page number." },
+    { name: "data-reveal-all", group: "Content", label: "Reveal at once", type: "flag",
       hint: "Show progressive-reveal content immediately instead of step by step.",
       when: s => hasOwn(s, "[data-reveal]"),
       onchange: s => { markRevealSteps(); step = getSteps(s).length ? step : 0; applyReveal(s); } },
-    { name: "data-sep", label: "Separator", values: ["dash", "en-dash", "slash", "pipe", "colon", "none"],
+    { name: "data-sep", group: "Content", label: "Separator", values: ["dash", "en-dash", "slash", "pipe", "colon", "none"],
       when: s => hasOwn(s, ".meta"),
       hint: "Divider drawn between meta items. Deck-wide default lives on <body>.",
       onchange: s => $$(".meta", s).forEach(ensureSeparators) },
-    { name: "data-list", label: "List style", values: ["numbers", "dots", "square", "dash", "chevron", "none"],
+    { name: "data-list", group: "Content", label: "List style", values: ["numbers", "dots", "square", "dash", "chevron", "none"],
       // ...and not when every item already carries a glyph: on the bullets
       // layout a glyph replaces that item's marker outright
       // (.slide--bullets li:has(> .glyph)::before { content: none }), so the
@@ -1373,7 +1470,7 @@
       onchange: ensureListMarkers },
     { name: "data-crop", on: "media", label: "Crop", values: ["cover", "contain"],
       hint: "How an image fills its slot — cover crops to fill, contain letterboxes. Toggled from the image's hover chip." },
-    { name: "data-clean", label: "Blank canvas", type: "flag",
+    { name: "data-clean", group: "Slide", label: "Blank canvas", type: "flag",
       when: ".slide--placeholder",
       hint: "Hide the placeholder prompt and dashed frame — e.g. to stack pasted images on an empty slide." },
   ].forEach(declareOption);
@@ -1532,6 +1629,8 @@
   }, 1500);
 
   let deckVersion = 0;            // bumped on every edit; the presenter window refetches the deck when it changes
+  const deckSession = Math.random().toString(36).slice(2);   // version restarts at 0 on reload; the session id keeps a reloaded deck distinct
+  const deckV = () => deckSession + ":" + deckVersion;
   function markDirty() {
     deckVersion++;
     dirty = true;
@@ -2079,7 +2178,7 @@
     ["↑↓←→", "Overview: select slide"], ["Enter", "Overview: open selected slide"],
     ["1…9", "Overview: type a slide number"], [`${KEY.alt}arrows`, "Overview: reorder slide (edit mode)"],
     [`${KEY.cmd}Z`, "Undo"], [`${KEY.cmd}${KEY.shift}Z`, "Redo"], [`${KEY.cmd}D`, "Duplicate slide"], [KEY.del, "Delete selected sticker"],
-    ["[ / ]", "Layer selected sticker or text box"], ["Rotate knob", "Turn a sticker or text box (⇧ = 15° steps)"], ["Arrows", `Nudge selected sticker / pin (${KEY.shift} = bigger)`],
+    ["[ / ]", "Send selected sticker or text box backward / forward — past the end it goes behind or in front of the text"], [`${KEY.alt}drag`, "Move a sticker without snapping to margin and centre guides"], [`${KEY.alt}click`, "Select a sticker that sits behind text"], ["Rotate knob", "Turn a sticker or text box (⇧ = 15° steps)"], ["Arrows", `Nudge selected sticker / pin (${KEY.shift} = bigger)`],
     ["Tab", "Next text box on the slide"], ["↑ / ↓", "At text edge: jump to text above / below"],
     [`${KEY.cmd}B`, "Emphasise selection (edit mode)"],
     [`${KEY.alt}↑ / ${KEY.alt}↓`, "Move list item up / down"],
@@ -2099,6 +2198,10 @@
         <button data-for="text" data-a="align:center" data-tip="Center" aria-label="Center"><svg viewBox="0 0 16 16"><path d="M2 3h12M4 7h8M2 11h12M4 15h8"/></svg></button>
         <button data-for="text" data-a="align:right" data-tip="Align right" aria-label="Align right"><svg viewBox="0 0 16 16"><path d="M2 3h12M6 7h8M2 11h12M6 15h8"/></svg></button>
         <button data-for="image" data-a="shadow" data-tip="Drop shadow on or off" aria-label="Drop shadow"><svg viewBox="0 0 16 16"><rect x="2.5" y="2.5" width="8" height="8" rx="1.5"/><path d="M5 13.5h8.5V5"/></svg></button>
+        <i></i>
+        <button data-a="backward" data-tip="Send backward ( [ )" aria-label="Send backward"><svg viewBox="0 0 16 16"><rect x="5.5" y="5.5" width="8" height="8" rx="1.5"/><path d="M10.5 3.5h-6a1 1 0 0 0-1 1v6"/></svg></button>
+        <button data-a="forward" data-tip="Bring forward ( ] )" aria-label="Bring forward"><svg viewBox="0 0 16 16"><rect x="2.5" y="2.5" width="8" height="8" rx="1.5"/><path d="M5.5 12.5h6a1 1 0 0 0 1-1v-6"/></svg></button>
+        <button data-a="behind" data-tip="Behind text — stack under the slide's words (Alt+click selects it again)" aria-label="Behind text"><svg viewBox="0 0 16 16"><path d="M3 4h10M3 8h4M3 12h10"/><rect x="7" y="5.5" width="6.5" height="5" rx="1" stroke-dasharray="2 1.6"/></svg></button>
         <i></i>
         <button data-a="delete" data-tip="Delete text box" aria-label="Delete text box"><svg viewBox="0 0 24 24"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/></svg></button>
       </div>
@@ -2141,6 +2244,16 @@
 
     $("#sheet-close").onclick = () => toggleShortcuts(false);
     $("#shortcuts-sheet").addEventListener("click", e => { if (e.target.id === "shortcuts-sheet") toggleShortcuts(false); });
+
+    // the sticker bar, the overview's buttons and the popovers' (?) hints are not in the toolbar but carry the same data-tip.
+    // These hosts persist, so bind once here, not on every toolbar render
+    [$("#tbx-bar"), $("#ov-bar"), $(".overview__head"), $("#pop-layer")].forEach(host => {
+      host?.addEventListener("mouseover", e => { const el = e.target.closest("[data-tip]"); if (el && host.contains(el)) showTip(el); });
+      host?.addEventListener("mouseout", e => { if (e.target.closest("[data-tip]")) hideTip(); });
+      host?.addEventListener("focusin", e => { const el = e.target.closest("[data-tip]"); if (el) showTip(el); });
+      host?.addEventListener("focusout", hideTip);
+      host?.addEventListener("pointerdown", hideTip);
+    });
 
     renderToolbar();
   }
@@ -2227,12 +2340,6 @@
 
   /* --------------------------------------------------------------- tooltips */
   function bindTooltips() {
-    // the sticker bar and the overview's buttons are not in the toolbar but carry the same data-tip
-    [$("#tbx-bar"), $("#ov-bar"), $(".overview__head")].forEach(host => {
-      host?.addEventListener("mouseover", e => { const el = e.target.closest("[data-tip]"); if (el && host.contains(el)) showTip(el); });
-      host?.addEventListener("mouseout", e => { if (e.target.closest("[data-tip]")) hideTip(); });
-      host?.addEventListener("pointerdown", hideTip);
-    });
     $$(".tb-btn", $("#toolbar")).forEach(b => {
       b.addEventListener("mouseenter", () => showTip(b));
       b.addEventListener("focus", () => showTip(b));
@@ -2248,7 +2355,10 @@
     tip.innerHTML = `${escapeHtml(label)}${key ? ` <kbd>${escapeHtml(key)}</kbd>` : ""}`;
     tip.style.display = "flex";
     const r = el.getBoundingClientRect();
-    tip.style.left = (r.left + r.width / 2) + "px";
+    const cx = r.left + r.width / 2, half = tip.offsetWidth / 2;
+    const x = Math.max(half + 8, Math.min(innerWidth - half - 8, cx));   // keep the tip on screen; its arrow still points at the element
+    tip.style.left = x + "px";
+    tip.style.setProperty("--ax", (cx - x) + "px");
     const below = r.top < 56;                      // no room above (a bar near the top edge): hang it underneath
     tip.style.top = (below ? r.bottom + 12 : r.top - 12) + "px";
     tip.style.transform = below ? "translate(-50%, 0)" : "translate(-50%, -100%)";
@@ -2310,6 +2420,7 @@
   /* -------------------------------------------------------------- popovers */
   let popAnchor = null;   // the element that opened the current popover — its own
                           // clicks toggle, so the outside-click closer ignores them
+  const optsOpen = new Map();   // Slide-options section folds the user chose, kept across re-renders
   function closePopover() { $("#pop-layer").innerHTML = ""; popAnchor = null; }
 
   // clicking the opening button again closes; renderPopover bypasses the
@@ -2348,34 +2459,55 @@
     }
     if (kind === "options") {
       // one row per declared slide option that can be picked from a list —
-      // enum options as a segmented control (plus Default = attribute unset),
-      // flags as Off/On. Brand extensions land here automatically.
+      // enum options as a segmented control (or a dropdown past three values,
+      // plus Default = attribute unset), flags as a switch. Rows sit in
+      // collapsible groups with their hint behind a (?) tooltip; brand
+      // extensions land here automatically.
       // an option's `when` (selector string or predicate) gates it to slides
       // where it actually does something — irrelevant rows never render
       const relevant = o => !o.when || (typeof o.when === "function" ? !!o.when(cur) : cur.matches(o.when));
       const editable = [...OPTIONS.values()].filter(o => o.on === "slide" && !o.derived && (o.values || o.type === "flag") && relevant(o));
+      const isSet = o => cur.getAttribute(o.name) !== null;
       const row = o => {
         const curV = cur.getAttribute(o.name);
-        const seg = o.type === "flag"
-          ? [["", "Off"], ["on", "On"]].map(([v, lab]) =>
-              `<button class="opt${(curV !== null) === (v === "on") ? " is-on" : ""}" data-name="${o.name}" data-v="${v}">${lab}</button>`).join("")
-          : [["", "Default"], ...o.values.map(v => [v, v])].map(([v, lab]) =>
-              `<button class="opt${(curV ?? "") === v ? " is-on" : ""}" data-name="${o.name}" data-v="${escapeHtml(v)}">${escapeHtml(lab)}</button>`).join("");
-        return `<div class="opt-row"><span class="opt-row__label"${o.hint ? ` data-tip="${escapeHtml(o.hint)}"` : ""}>${escapeHtml(o.label || o.name)}</span><span class="opt-row__seg">${seg}</span></div>`;
+        const name = escapeHtml(o.name), label = escapeHtml(o.label || o.name);
+        let ctl;
+        if (o.type === "flag") {
+          ctl = `<button class="opt-switch${curV !== null ? " is-on" : ""}" role="switch" aria-checked="${curV !== null}" aria-label="${label}" data-name="${name}" data-v="${curV !== null ? "" : "on"}"><i></i></button>`;
+        } else if (o.values.length > 3) {
+          ctl = `<select class="opt-select" aria-label="${label}" data-name="${name}">${[["", "Default"], ...o.values.map(v => [v, v])].map(([v, lab]) =>
+            `<option value="${escapeHtml(v)}"${(curV ?? "") === v ? " selected" : ""}>${escapeHtml(lab)}</option>`).join("")}</select>`;
+        } else {
+          ctl = `<span class="opt-row__seg">${[["", "Default"], ...o.values.map(v => [v, v])].map(([v, lab]) =>
+            `<button class="opt${(curV ?? "") === v ? " is-on" : ""}" data-name="${name}" data-v="${escapeHtml(v)}">${escapeHtml(lab)}</button>`).join("")}</span>`;
+        }
+        return `<div class="opt-row" data-find="${escapeHtml(`${o.label || ""} ${o.name} ${o.hint || ""}`.toLowerCase())}">
+          <span class="opt-row__text"><span class="opt-row__label">${label}</span>${o.hint ? `<button class="opt-help" data-tip="${escapeHtml(o.hint)}" aria-label="About ${label}: ${escapeHtml(o.hint)}">?</button>` : ""}</span>${ctl}</div>`;
       };
+      // sections in declaration order; many rows → only the first and any holding a value start open
+      const groups = new Map();
+      editable.forEach(o => { const g = o.group || "Other"; (groups.get(g) || groups.set(g, []).get(g)).push(o); });
+      const many = editable.length > 8;
+      const section = ([g, os], gi) => {
+        const set = os.filter(isSet).length;
+        const open = optsOpen.has(g) ? optsOpen.get(g) : (!many || gi === 0 || set > 0);
+        return `<section class="opt-group${open ? " is-open" : ""}" data-group="${escapeHtml(g)}">
+          <button class="opt-group__head" aria-expanded="${open}"><svg class="icon"><use href="#i-next"/></svg><span>${escapeHtml(g)}</span>${set ? `<small>${set} set</small>` : ""}</button>
+          <div class="opt-group__rows">${os.map(row).join("")}</div></section>`;
+      };
+      const anySet = editable.some(isSet);
       layer.innerHTML = `
         <div class="pop" id="opts-pop">
-          <h4>Slide options</h4>
+          <div class="pop__row opt-head"><h4>Slide options</h4>${anySet ? `<button class="btn btn--quiet" id="opts-reset">Reset all</button>` : ""}</div>
           <p class="pop__sub">Saved on the slide's markup. Slide ${index + 1} of ${slides.length}.</p>
-          <div class="opt-rows">${editable.map(row).join("")}</div>
+          ${many ? `<input class="opt-find" type="search" placeholder="Find an option…" aria-label="Find an option" spellcheck="false">` : ""}
+          <div class="opt-rows">${[...groups].map(section).join("") || `<p class="opt-empty">No options apply to this slide.</p>`}<p class="opt-empty opt-nomatch" hidden>No option matches.</p></div>
         </div>`;
       positionPopover($("#opts-pop"), anchor);
-      $$(".opt", layer).forEach(b => b.onclick = () => {
-        const { name, v } = b.dataset;
-        const def = OPTIONS.get(name);
-        // resolve the slide at click time — `cur` may be detached if the deck
-        // was rebuilt (⌘D, ⌫) while the popover stayed open
-        const s = slides[index];
+      // resolve the slide at click time — `cur` may be detached if the deck
+      // was rebuilt (⌘D, ⌫) while the popover stayed open
+      const apply = (name, v) => {
+        const def = OPTIONS.get(name), s = slides[index];
         // "" sets a valueless attribute (flag on), null removes it
         const next = def.type === "flag" ? (v === "on" ? "" : null) : (v || null);
         if (s.getAttribute(name) === next) return;   // no-op click: don't snapshot/autosave
@@ -2383,7 +2515,36 @@
         if (next === null) s.removeAttribute(name); else s.setAttribute(name, next);
         def.onchange?.(s);                         // option-specific side effects (e.g. re-marking reveal steps)
         renderPopover("options", anchor);          // re-render with the new state
+      };
+      $$(".opt, .opt-switch", layer).forEach(b => b.onclick = () => apply(b.dataset.name, b.dataset.v));
+      $$(".opt-select", layer).forEach(sel => sel.onchange = () => apply(sel.dataset.name, sel.value));
+      $$(".opt-group__head", layer).forEach(h => h.onclick = () => {
+        const sec = h.parentElement, open = !sec.classList.contains("is-open");
+        sec.classList.toggle("is-open", open);
+        h.setAttribute("aria-expanded", open);
+        optsOpen.set(sec.dataset.group, open);
+        positionPopover($("#opts-pop"), anchor);
       });
+      const reset = $("#opts-reset");
+      if (reset) reset.onclick = () => {
+        const s = slides[index], held = editable.filter(isSet);
+        snapshot();
+        held.forEach(o => { s.removeAttribute(o.name); o.onchange?.(s); });
+        renderPopover("options", anchor);
+      };
+      const find = $(".opt-find", layer);
+      if (find) find.oninput = () => {
+        const q = find.value.trim().toLowerCase();
+        let shown = 0;
+        $$(".opt-row", layer).forEach(r => { const hit = !q || r.dataset.find.includes(q); r.hidden = !hit; if (hit) shown++; });
+        // searching opens every section that has a match; clearing restores the user's own folds
+        $$(".opt-group", layer).forEach(sec => {
+          const any = $$(".opt-row", sec).some(r => !r.hidden);
+          sec.hidden = !any;
+          sec.classList.toggle("is-open", q ? any : (optsOpen.has(sec.dataset.group) ? optsOpen.get(sec.dataset.group) : sec.classList.contains("is-open")));
+        });
+        $(".opt-nomatch", layer).hidden = shown > 0;
+      };
     }
   }
   // PDF export: pages are 16:9 by @page rule in Chromium; Safari ignores
@@ -2703,21 +2864,23 @@
         ? `Can't reach the deck window — Safari isolates <code>file://</code> pages from each other, so presenter view can't drive the deck. Open the deck in Chrome, or serve its folder over http.`
         : `Can't reach the deck window. Presenter view is a remote control — keep the deck open in its own window or tab.`;
     };
-    let lastSeen = 0, deckV = null, askedV = null;
+    let lastSeen = 0, haveV = null, askedV = null;
+    const askDeck = debounce(() => chan.postMessage({ need: "deck" }), 400);
     chan.onmessage = e => {
       const d = e.data;
       // the deck window answered our request for its current slides
       if (typeof d?.deckHtml === "string") {
         deck.innerHTML = d.deckHtml;
         slides = $$(".slide", deck);
-        deckV = d.v;
+        haveV = d.v;
         index = Math.min(index, slides.length - 1);
         renderPresenter();
         return;
       }
       if (typeof d?.index !== "number") return;
       lastSeen = Date.now();
-      if (typeof d.v === "number" && d.v !== deckV && askedV !== d.v) { askedV = d.v; chan.postMessage({ need: "deck" }); }
+      // trailing debounce: a burst of edits is one request, after the slide transition settles
+      if (typeof d.v === "string" && d.v !== haveV && askedV !== d.v) { askedV = d.v; askDeck(); }
       const changed = d.index !== index || (d.step || 0) !== step;
       index = d.index; step = d.step || 0;
       // the presenter's clones come from the DOM it parsed at load; the deck
@@ -2756,12 +2919,20 @@
     $("#pv-next").closest(".thumb__frame").addEventListener("click", () => chan.postMessage({ action: "next" }));
     renderPresenter();
   }
+  // the deck's html for the presenter, minus the live window's transient state
+  function presenterHtml() {
+    const c = deck.cloneNode(true);
+    $$(".is-entering, .is-leaving", c).forEach(s => s.classList.remove("is-entering", "is-leaving"));
+    $$(".is-sel", c).forEach(n => n.classList.remove("is-sel"));
+    $$("[contenteditable], [spellcheck]", c).forEach(n => { n.removeAttribute("contenteditable"); n.removeAttribute("spellcheck"); });
+    return c.innerHTML;
+  }
   function initMainChannel() {
     mainChan = new BroadcastChannel("slaydy:" + location.pathname);
     mainChan.onmessage = e => {
       const d = e.data;
       if (d?.hello) return syncState();
-      if (d?.need === "deck") return mainChan.postMessage({ deckHtml: deck.innerHTML, v: deckVersion });
+      if (d?.need === "deck") return mainChan.postMessage({ deckHtml: presenterHtml(), v: deckV() });
       if (d?.action === "next") advance();
       else if (d?.action === "prev") retreat();
       else if (d?.action === "home") show(0, true, "fwd");
@@ -2865,17 +3036,9 @@
           if (selectedSticker) { snapshot(); selectedSticker.remove(); selectSticker(null); }
           else if (selectedPin) { deletePin(selectedPin); selectPin(null); }
           break;
-        case "[": case "]": {
-          // layer the selected sticker: stickers share z-index 4, so DOM
-          // order among .sticker siblings is the stacking order — and it
-          // serializes for free
-          if (!editing || !selectedSticker) break;
-          const sib = e.key === "]" ? selectedSticker.nextElementSibling : selectedSticker.previousElementSibling;
-          if (!sib?.classList.contains("sticker")) break;
-          snapshot();
-          e.key === "]" ? sib.after(selectedSticker) : sib.before(selectedSticker);
+        case "[": case "]":
+          layerSticker(e.key === "]" ? 1 : -1);
           break;
-        }
       }
     });
 

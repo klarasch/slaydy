@@ -1188,13 +1188,14 @@ html:fullscreen body.is-idle { cursor: none; }
   padding: 7px 10px; border-radius: 8px;
   background: #f6f5f3; color: #0b0b0f;
   font: 500 12px/1 var(--font-body);
+  width: max-content; max-width: 260px; line-height: 1.4;   /* long hints wrap */
   box-shadow: 0 8px 24px rgba(0, 0, 0, .4);
   pointer-events: none;
 }
 .tip[data-below]::after { display: none; }
 .tip kbd { font: 500 11px/1 var(--font-mono); padding: 3px 6px; border-radius: 5px; background: rgba(11, 11, 15, .1); }
 .tip::after {
-  content: ""; position: absolute; left: 50%; bottom: -5px;
+  content: ""; position: absolute; left: calc(50% + var(--ax, 0px)); bottom: -5px;
   width: 10px; height: 10px; background: #f6f5f3;
   transform: translateX(-50%) rotate(45deg);
 }
@@ -1264,14 +1265,52 @@ html:fullscreen body.is-idle { cursor: none; }
   background: #0e0e13; color: #f6f5f3; font: 400 14px/1.5 var(--font-body);
 }
 .pop__row { display: flex; justify-content: space-between; align-items: center; gap: 10px; margin-top: 14px; }
-/* the options popover is wider than the base .pop so common enum rows fit on
-   one line; rows and segments both wrap as the structural guarantee — brand
-   registries declare value lists of any length */
+/* the options popover is wider than the base .pop so common rows fit on
+   one line. Options live in collapsible groups under a pinned heading; the
+   list scrolls, so a brand registry can declare any number of options and
+   nothing is cropped. Rows wrap as the structural guarantee. */
 #opts-pop { width: min(560px, calc(100vw - 32px)); max-height: var(--pop-max, calc(100vh - 110px)); display: flex; flex-direction: column; }
-.opt-rows { display: flex; flex-direction: column; gap: 10px; margin-top: 14px; min-width: 340px; min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
-.opt-row { display: flex; align-items: center; justify-content: space-between; gap: 8px 18px; flex-wrap: wrap; }
-.opt-row__label { font-size: 12.5px; color: rgba(246, 245, 243, .7); white-space: nowrap; }
+.opt-head { margin-top: 0; }
+.opt-head .btn { height: 28px; padding: 0 10px; font-size: 12px; }
+.opt-find {
+  display: block; width: 100%; margin-top: 12px; height: 32px; padding: 0 12px; box-sizing: border-box;
+  border-radius: 8px; border: 1px solid rgba(255, 255, 255, .12); background: #0e0e13; color: #f6f5f3; font: 400 13px/1 var(--font-body);
+}
+.opt-find::placeholder { color: rgba(246, 245, 243, .4); }
+.opt-rows { display: flex; flex-direction: column; gap: 4px; margin-top: 12px; min-width: 340px; min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
+.opt-group[hidden], .opt-row[hidden], .opt-empty[hidden] { display: none; }
+.opt-group + .opt-group { border-top: 1px solid rgba(255, 255, 255, .08); }
+.opt-group__head {
+  display: flex; align-items: center; gap: 6px; width: 100%; padding: 8px 2px; border: 0; background: none; cursor: pointer;
+  color: rgba(246, 245, 243, .55); font: 600 11px/1 var(--font-body); letter-spacing: .08em; text-transform: uppercase; text-align: left;
+}
+.opt-group__head:hover { color: #fff; }
+.opt-group__head .icon { width: 12px; height: 12px; transition: transform .15s; }
+.opt-group.is-open > .opt-group__head .icon { transform: rotate(90deg); }
+.opt-group__head small { margin-left: auto; font: 500 11px/1 var(--font-body); letter-spacing: 0; text-transform: none; color: var(--accent); }
+.opt-group__rows { display: none; flex-direction: column; gap: 12px; padding: 4px 2px 14px; }
+.opt-group.is-open > .opt-group__rows { display: flex; }
+.opt-row { display: flex; align-items: center; justify-content: space-between; gap: 8px 18px; }
+.opt-row__text { display: flex; align-items: center; gap: 7px; min-width: 0; flex: 1 1 180px; }
+.opt-row__label { font-size: 13px; color: rgba(246, 245, 243, .88); }
+.opt-help {
+  flex: none; width: 16px; height: 16px; padding: 0; border: 1px solid rgba(255, 255, 255, .22); border-radius: 50%; cursor: help;
+  background: none; color: rgba(246, 245, 243, .5); font: 600 10px/1 var(--font-body);
+}
+.opt-help:hover, .opt-help:focus-visible { color: #fff; border-color: rgba(255, 255, 255, .6); outline: none; }
+.opt-empty { margin: 8px 2px; font-size: 12.5px; color: rgba(246, 245, 243, .5); }
 .opt-row__seg { display: flex; flex-wrap: wrap; gap: 3px; background: rgba(255, 255, 255, .06); border-radius: 8px; padding: 3px; }
+.opt-select {
+  height: 30px; padding: 0 8px; border: 0; border-radius: 7px; cursor: pointer; max-width: 55%;
+  background: rgba(255, 255, 255, .08); color: rgba(246, 245, 243, .92); font: 500 12px/1 var(--font-body);
+}
+.opt-switch {
+  position: relative; flex: none; width: 34px; height: 20px; padding: 0; border: 0; border-radius: 10px; cursor: pointer;
+  background: rgba(255, 255, 255, .16); transition: background .15s;
+}
+.opt-switch i { position: absolute; left: 2px; top: 2px; width: 16px; height: 16px; border-radius: 50%; background: #fff; transition: transform .15s; }
+.opt-switch.is-on { background: var(--accent); }
+.opt-switch.is-on i { transform: translateX(14px); }
 .opt {
   border: 0; background: transparent; color: rgba(246, 245, 243, .6);
   font: 500 12px/1 var(--font-body); padding: 6px 10px; border-radius: 6px; cursor: pointer;
@@ -1504,6 +1543,17 @@ body.is-editing [contenteditable]:focus {
 body.is-editing .sticker { cursor: grab; }
 body.is-editing .sticker:active { cursor: grabbing; }
 body.is-editing .sticker.is-sel { outline: 2px solid var(--accent); outline-offset: 3px; }
+/* behind text: below the slide's in-flow content, above its wash (which is
+   first in the DOM at the same z-index). Selected or not, it stays behind —
+   what the editor shows is what the slide is. */
+.sticker[data-layer="back"] { z-index: -1; }
+
+/* drag guides: snap lines for margins (--pad) and centre, drawn only while dragging */
+.guide { position: absolute; z-index: 6; pointer-events: none; background: #ff3d8b; opacity: .9; }
+.guide[data-axis="x"] { top: 0; bottom: 0; width: 1px; margin-left: -.5px; }
+.guide[data-axis="y"] { left: 0; right: 0; height: 1px; margin-top: -.5px; }
+.guide.is-centre { background: var(--accent); }
+@media print { .guide { display: none; } }
 .handle {
   position: absolute; width: 12px; height: 12px; z-index: 5;
   background: #fff; border: 1.5px solid #0b0b0f; border-radius: 3px;
@@ -1590,10 +1640,10 @@ body.is-editing .slide[data-overflow] .slide__overflow-badge { display: flex; }
 /* =========================================================================
    Overflow guard — data-fit / data-overflow are derived, stripped on save
    ========================================================================= */
-.slide[data-fit="0.95"] > :not(.slide__wash):not(.slide__chrome):not(.sticker) { zoom: .95; }
-.slide[data-fit="0.9"]  > :not(.slide__wash):not(.slide__chrome):not(.sticker) { zoom: .9; }
-.slide[data-fit="0.85"] > :not(.slide__wash):not(.slide__chrome):not(.sticker) { zoom: .85; }
-.slide[data-fit="0.8"]  > :not(.slide__wash):not(.slide__chrome):not(.sticker) { zoom: .8; }
+.slide[data-fit="0.95"] > :not(.slide__wash):not(.slide__chrome):not(.sticker):not(.guide) { zoom: .95; }
+.slide[data-fit="0.9"]  > :not(.slide__wash):not(.slide__chrome):not(.sticker):not(.guide) { zoom: .9; }
+.slide[data-fit="0.85"] > :not(.slide__wash):not(.slide__chrome):not(.sticker):not(.guide) { zoom: .85; }
+.slide[data-fit="0.8"]  > :not(.slide__wash):not(.slide__chrome):not(.sticker):not(.guide) { zoom: .8; }
 
 /* =========================================================================
    Speaker notes — hidden by default; only shown in print with ?notes.
