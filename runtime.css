@@ -1191,6 +1191,7 @@ html:fullscreen body.is-idle { cursor: none; }
   box-shadow: 0 8px 24px rgba(0, 0, 0, .4);
   pointer-events: none;
 }
+.tip[data-below]::after { display: none; }
 .tip kbd { font: 500 11px/1 var(--font-mono); padding: 3px 6px; border-radius: 5px; background: rgba(11, 11, 15, .1); }
 .tip::after {
   content: ""; position: absolute; left: 50%; bottom: -5px;

@@ -329,6 +329,7 @@
     document.body.dataset.dir = dir;
     index = to;
     const cur = slides[index];
+    if (selectedSticker && selectedSticker.closest(".slide") !== cur) selectSticker(null);
 
     if (changing) {
       const prevSlide = slides[from];
@@ -393,7 +394,7 @@
   }
   const next = advance;
   const prev = gotoPrev;
-  function syncState() { mainChan?.postMessage({ index, step, count: slides.length }); }
+  function syncState() { mainChan?.postMessage({ index, step, count: slides.length, v: deckVersion }); }
   // public events — the stable hook surface for an install's custom.js
   // (see CUSTOMIZING.md); detail carries live DOM nodes, never clones
   const emit = (name, detail) => deck.dispatchEvent(new CustomEvent("slaydy:" + name, { detail, bubbles: true }));
@@ -667,6 +668,7 @@
   function toggleEdit(force) {
     editing = force ?? !editing;
     document.body.classList.toggle("is-editing", editing);
+    if (!editing) { selectSticker(null); selectPin(null); }   // nothing stays selected (or floating its bar) in view mode
     renderToolbar();
     if (editing) settleCounts();
     editing ? enableEditing() : disableEditing();
@@ -806,7 +808,7 @@
     if (!bar) return;
     const b = editing ? selectedSticker : null;
     bar.classList.toggle("is-shown", !!b);
-    if (!b) return;
+    if (!b) return hideTip();
     bar.dataset.kind = b.classList.contains("sticker--text") ? "text" : "image";
     $("[data-a='shadow']", bar).classList.toggle("is-on", b.dataset.shadow !== "off");
     if (bar.dataset.kind === "text") $("select", bar).value = tbxStyle(b);
@@ -1527,7 +1529,9 @@
     updateSaveUI();
   }, 1500);
 
+  let deckVersion = 0;            // bumped on every edit; the presenter window refetches the deck when it changes
   function markDirty() {
+    deckVersion++;
     dirty = true;
     updateSaveUI();
     if (dirHandle) scheduleAutosave();
@@ -2221,6 +2225,12 @@
 
   /* --------------------------------------------------------------- tooltips */
   function bindTooltips() {
+    // the sticker bar and the overview's buttons are not in the toolbar but carry the same data-tip
+    [$("#tbx-bar"), $("#ov-bar"), $(".overview__head")].forEach(host => {
+      host?.addEventListener("mouseover", e => { const el = e.target.closest("[data-tip]"); if (el && host.contains(el)) showTip(el); });
+      host?.addEventListener("mouseout", e => { if (e.target.closest("[data-tip]")) hideTip(); });
+      host?.addEventListener("pointerdown", hideTip);
+    });
     $$(".tb-btn", $("#toolbar")).forEach(b => {
       b.addEventListener("mouseenter", () => showTip(b));
       b.addEventListener("focus", () => showTip(b));
@@ -2237,8 +2247,10 @@
     tip.style.display = "flex";
     const r = el.getBoundingClientRect();
     tip.style.left = (r.left + r.width / 2) + "px";
-    tip.style.top = (r.top - 12) + "px";
-    tip.style.transform = "translate(-50%, -100%)";
+    const below = r.top < 56;                      // no room above (a bar near the top edge): hang it underneath
+    tip.style.top = (below ? r.bottom + 12 : r.top - 12) + "px";
+    tip.style.transform = below ? "translate(-50%, 0)" : "translate(-50%, -100%)";
+    tip.toggleAttribute("data-below", below);
   }
   function hideTip() { $("#tip").style.display = "none"; }
 
@@ -2689,22 +2701,27 @@
         ? `Can't reach the deck window — Safari isolates <code>file://</code> pages from each other, so presenter view can't drive the deck. Open the deck in Chrome, or serve its folder over http.`
         : `Can't reach the deck window. Presenter view is a remote control — keep the deck open in its own window or tab.`;
     };
-    let lastSeen = 0, staleShown = false;
+    let lastSeen = 0, deckV = null, askedV = null;
     chan.onmessage = e => {
       const d = e.data;
+      // the deck window answered our request for its current slides
+      if (typeof d?.deckHtml === "string") {
+        deck.innerHTML = d.deckHtml;
+        slides = $$(".slide", deck);
+        deckV = d.v;
+        index = Math.min(index, slides.length - 1);
+        renderPresenter();
+        return;
+      }
       if (typeof d?.index !== "number") return;
       lastSeen = Date.now();
+      if (typeof d.v === "number" && d.v !== deckV && askedV !== d.v) { askedV = d.v; chan.postMessage({ need: "deck" }); }
       const changed = d.index !== index || (d.step || 0) !== step;
       index = d.index; step = d.step || 0;
-      // the presenter's clones come from the DOM it parsed at load, so a
-      // slide added or removed in the deck window needs a reload here
-      const stale = typeof d.count === "number" && d.count !== slides.length;
-      if (stale) {
-        alertEl.hidden = false;
-        alertEl.textContent = "Slides changed in the deck window: reload this window.";
-      } else if (staleShown) alertEl.hidden = true;
-      staleShown = stale;
-      if (!synced) { synced = true; alertEl.hidden = stale ? false : true; renderPresenter(); return; }
+      // the presenter's clones come from the DOM it parsed at load; the deck
+      // window's version number tells it when that is out of date (a reorder,
+      // an added slide, an edited note) and it asks for the current slides
+      if (!synced) { synced = true; alertEl.hidden = true; renderPresenter(); return; }
       if (!changed) return;                             // heartbeat echo, nothing new
       if (elapsedStart === null) elapsedStart = Date.now();
       renderPresenter();
@@ -2742,6 +2759,7 @@
     mainChan.onmessage = e => {
       const d = e.data;
       if (d?.hello) return syncState();
+      if (d?.need === "deck") return mainChan.postMessage({ deckHtml: deck.innerHTML, v: deckVersion });
       if (d?.action === "next") advance();
       else if (d?.action === "prev") retreat();
       else if (d?.action === "home") show(0, true, "fwd");
