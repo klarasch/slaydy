@@ -3,6 +3,10 @@
 
 # Branding slaydy
 
+**Setting a brand up for someone (`SKILL.md` §8)? The procedure is §8 at the end of this file.
+Start there: it decides where the brand goes before anything is extracted or written, and it
+sends you back up here for the details.**
+
 How to adapt slaydy to a company identity. A brand is four things on disk:
 
 ```
@@ -42,8 +46,9 @@ Three rules that save a round trip:
 - **Derive `--muted` and `--faint` as `rgba()` of `--fg`**, never as separate hex values. It is
   what makes the deck feel coherent, and it survives a background change.
 - **`--accent-fg` is the most common mistake.** Section-divider slides fill with `--accent` and
-  set all their text to `--accent-fg`. Check contrast both ways; a mid-tone brand colour usually
-  needs white here, not the brand's own dark neutral.
+  set all their text to `--accent-fg`. Compute the contrast ratio of both white and the brand's
+  dark against `--accent` and use whichever is higher; it must reach 4.5:1. A deep colour takes
+  white; a mid-tone orange, green or cyan takes the dark.
 - **Set `--wash-opacity: 0` for corporate and conservative brands.** The radial gradient wash
   reads as "startup deck" and brand teams reject it. Default to `0` unless the brand is
   visibly playful.
@@ -344,3 +349,141 @@ HTML slide decks" compete, and the generic one wins as often as yours. Then `./b
 `dist/<name>/` is the skill: commit it and distribute it as a Claude Code plugin, or drop it
 into a repo's `.claude/skills/` as a project skill. Everyone who installs it generates decks in
 the same brand with no further setup.
+
+---
+
+## 8. Setup runbook — training a brand
+
+The procedure behind `SKILL.md` §8, for Claude to follow when asked to set a brand up. The
+sections above are the reference: token semantics, `@font-face`, logo placement, a worked voice
+file. Read them before writing a theme.
+
+Inputs: a website URL, brand guidelines PDF, and/or a logo file. Any one is enough.
+
+**Decide where the brand goes, before extracting anything.** A brand lives in a fork: its own
+git repo, a sibling of an upstream slaydy checkout, so `take-update.sh` can update it later
+(`UPDATING.md` §2). Never write brand files into upstream itself, and never into an installed
+copy of the skill (`~/.claude/skills/…`) — neither can take an update. Look at where you are:
+
+1. **Already in a fork** — the working directory is a git repo with `runtime.js` and either
+   `SKILL.fork.md` or `.slaydy-upstream`, and it is not upstream. Write there. Find the upstream
+   checkout (a sibling `slaydy/` folder; otherwise ask for its path) and remember it for step 4.
+2. **In upstream** — the working directory is a slaydy checkout with no `SKILL.fork.md` (its
+   `origin` is usually `github.com/klarasch/slaydy`). Don't write here. Make the fork beside it.
+3. **Anywhere else, with a shell** — find an upstream checkout (`~/Code/slaydy` or a sibling
+   `slaydy/`). If there is none, say where you will clone it and clone
+   `https://github.com/klarasch/slaydy.git` — the one upstream folder serves every fork on the
+   machine.
+4. **In chat, no git** (Claude desktop, Claude.ai, Cowork) — the user installed slaydy as an
+   uploaded skill and won't touch a terminal. The deliverable is a new skill zip, built in your
+   sandbox; skip "Making the fork" and "Build, commit, install" below and follow
+   **Chat install** at the end of this section instead.
+
+Making the fork (cases 2 and 3). Name it `<brand>-decks` unless the user names it, next to
+upstream. `<brand>` is the first word of the brand name, lower-case (Northwind Freight →
+`northwind-decks`), and the theme files take the same word (`themes/northwind.css`):
+
+```bash
+git clone <upstream> <parent>/<name>                  # local clone: same commit, shared history
+git -C <parent>/<name> remote rename origin upstream-slaydy
+cd <parent>/<name> && <upstream>/take-update.sh       # every file matches: writes .slaydy-upstream
+```
+
+Refuse if `<parent>/<name>` exists and is not empty — ask for another name. If upstream has
+uncommitted changes the stamp step refuses too; say so and ask whether to commit upstream or
+clone from `https://github.com/klarasch/slaydy.git` instead. A GitHub remote for the fork is
+the user's call: offer `gh repo create <name> --private --source . --push` at the end, and run
+it only on a yes.
+
+**Extract** — colours (accent, background, text), typefaces, and the logo. From a URL, read the
+rendered page and its CSS custom properties; from a PDF, the palette and type pages. Values the
+user stated outright win over anything extracted. If the site can't be read, work from what the
+user gave and say so. Nothing is written into the fork yet, the logo included.
+
+**Show before writing.** Present the nine resolved tokens and the draft voice rules for review in
+one message, then wait for the reply. Resolve the tokens like this:
+
+- `--accent-fg` must have real contrast against `--accent` — section dividers fill with the accent
+  and set all their text to `--accent-fg`. **Compute the WCAG contrast ratio of both candidates
+  (the brand's light and its dark) against `--accent` and take the higher; it must reach 4.5:1.**
+  Never state a ratio you did not compute: white on a mid-tone orange, green or cyan fails, and
+  the brand's dark is the answer there. Show the number.
+- Tokens the brand did not supply are derived, and marked "derived" in what you show: `--surface`
+  is `--bg` moved one small step toward `--fg`; `--app-bg` is `--bg` a shade darker; `--accent-2`
+  is a second brand colour if one exists, otherwise a lighter tint of `--accent`.
+- Corporate brands almost always want `--wash-opacity: 0`. The gradient wash reads as
+  "startup deck".
+- Voice rules come from the brand's own material: its site copy, its guidelines, what the user
+  said. The worked voice file in §4 is an example of the form, not a source: carry none of its
+  rules over. Where the material gives little, write fewer rules and mark each guess as one.
+
+**Then write** into the fork (or `slaydy-brand/`, case 4). Files:
+
+- `themes/<name>.css` — the nine tokens plus font overrides. Follow §1 and §2 above.
+- `themes/<name>.md` — voice: 5–10 concrete, checkable rules covering tone, banned words, how
+  headlines are written, any mandatory slide, layouts to prefer or avoid.
+- `fonts/` + `@font-face` in the theme file, if fonts were supplied as files.
+- `images/logo.svg`, if supplied.
+- `themes/default` — one line, this brand's name.
+- `SKILL.fork.md` — the install's own skill identity, so it registers as the brand's deck skill
+  rather than as a second generic one (`CUSTOMIZING.md`, Layer 0). `./build.sh` composes the
+  shipped `SKILL.md` from it. Use this shape exactly: frontmatter, then two to five plain lines
+  of standing orders, and no heading (the build supplies the title). The description is the
+  installed skill's own description with the brand named in its first clause and every trigger
+  phrase kept; a short description stops the skill from triggering.
+
+  ```
+  ---
+  name: <name>
+  description: Generate editable, <Brand>-branded HTML slide decks, revise existing ones … (the rest of this skill's description, unchanged)
+  ---
+
+  This install is locked to the <Brand> brand. Link `themes/<name>.css` as `id="theme"` and
+  never set `data-themes`. Never ask which theme to use. Read `themes/<name>.md` before
+  writing any slide.
+  ```
+- `skeleton.html` — **copy the code block under "Deck skeleton" in `LAYOUTS.md` character for
+  character, then change only these**: the theme `href`, the font `<link>`s (the brand's, or
+  none when `fonts/` and `@font-face` carry them — then drop the Google Fonts line),
+  `data-deck-label`, `data-logo`, and `data-themes` only if the install deliberately offers
+  several surfaces. Never write the skeleton from memory: a deck without the exact wrappers
+  renders black. Generation copies it exactly (`SKILL.md` §3), so nothing about the wiring is
+  ever re-derived.
+
+**Build, commit, install.** In the fork:
+
+1. `./build.sh` — it takes the name from `SKILL.fork.md` and writes `dist/<name>/` and
+   `dist/<name>-skill.zip`.
+2. Generate a three-slide check deck from `dist/<name>/` into a scratch folder and open it: the
+   theme, fonts and logo must show. Fix the brand files, not the runtime, if they don't.
+3. Commit the brand and `.slaydy-upstream` as one commit ("<Brand> brand"). `dist/` is ignored.
+4. Ask before installing, then `cp -R dist/<name> ~/.claude/skills/<name>`. If a generic
+   `slaydy` install sits beside it, say so: two deck skills compete to trigger, and the user
+   may want the generic one removed.
+
+**Close by telling them how to share it:** send `dist/<name>-skill.zip`, or push the fork and
+have people build from it. Everyone who installs it generates decks in the brand with no
+further setup. Updates are one prompt away — `SKILL.md` §9.
+
+**Chat install** (case 4). After the user says go:
+
+1. Copy this installed skill's folder into a scratch `<name>/` folder (`<brand>-decks` unless
+   the user names it). It is already a build: no demo deck, no scripts.
+2. Write the brand files listed above into it. Also write `SKILL.fork.md` as a file in the
+   folder: it is how a later update recovers the skill's identity.
+3. Compose `SKILL.md` the way `build.sh` does: replace its frontmatter with `SKILL.fork.md`'s,
+   retitle the first `# ` heading to `# <name>`, and put `SKILL.fork.md`'s body directly under
+   that heading. Leave the rest of the body byte for byte.
+4. Check a three-slide deck generated from `<name>/` renders the brand, then zip the folder as
+   `<name>-skill.zip` with `<name>/` at the root of the zip, and hand it over.
+5. Close with: "Upload `<name>-skill.zip` in Settings › Capabilities › Skills, then turn off the
+   plain slaydy skill so the two don't compete. Send the same zip to teammates."
+
+**Chat update.** When the user has a newer slaydy zip installed or attached and asks to update
+their branded skill: start from the new slaydy folder, bring over every file from the branded
+skill that `UPDATING.md` §1 does not list as a release's (theme, voice, `themes/default`,
+`fonts/`, `images/`, `custom*`, `skeleton.html`, `SKILL.fork.md`, their own icons), then compose
+`SKILL.md` from the branded skill's `SKILL.fork.md` as in step 3. If it has none, recover the head
+from its current `SKILL.md`: the frontmatter, and the lines between the title and upstream's
+first `**` paragraph. Check, zip and close as in steps 4–5, telling the user to upload the new
+zip in place of the old one. Say what changed in the new slaydy if its zip carries a changelog.

@@ -1161,10 +1161,13 @@ html:fullscreen body.is-idle { cursor: none; }
 .tb-btn.is-disabled { opacity: .35; pointer-events: none; }
 .tb-btn.primary { background: var(--accent); color: var(--accent-fg); }
 .tb-btn.primary .icon { stroke: var(--accent-fg); }
-.tb-btn.is-status { cursor: default; color: rgba(246, 245, 243, .55); }
-.tb-btn.is-status:hover { background: none; }
-.tb-btn.is-warn { color: #ffb020; }
-.tb-btn.is-warn .icon { color: #ffb020; }
+/* unsaved changes: a dot on Download copy, never a colour change. --tb-unsaved recolours it */
+.tb-btn.has-unsaved { position: relative; }
+.tb-btn.has-unsaved::after {
+  content: ""; position: absolute; top: 5px; right: 5px;
+  width: 6px; height: 6px; border-radius: 50%;
+  background: var(--tb-unsaved, var(--accent));
+}
 .tb-count {
   font: 500 13px/1 var(--font-mono); font-variant-numeric: tabular-nums;
   min-width: 66px; text-align: center; color: rgba(246, 245, 243, .7);
@@ -1173,7 +1176,7 @@ html:fullscreen body.is-idle { cursor: none; }
 
 /* --- narrow viewports: the edit-mode bar is the widest (restart, prev,
    counter, next, sep, add slide, dup, del, sep, options, request change,
-   speaker notes, sep, undo, save, sep, done — ~1010px of buttons+gaps+
+   speaker notes, sep, undo, download, sep, done — ~1010px of buttons+gaps+
    padding at 13px/500 body type). Icon-collapse labelled buttons first;
    tooltips (data-tip) still name every button, so nothing is lost. --- */
 @media (max-width: 1080px) {
@@ -1340,7 +1343,6 @@ html:fullscreen body.is-idle { cursor: none; }
 }
 .menu-item:hover, .menu-item:focus-visible { background: rgba(255, 255, 255, .08); outline: none; }
 .menu-item .icon { width: 16px; height: 16px; opacity: .7; }
-.js-save-label { max-width: 190px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .menu-item kbd { margin-left: auto; opacity: .45; font: 500 11px/1 var(--font-body); }
 .btn {
   height: 34px; padding: 0 14px; border-radius: 9px; border: 1px solid rgba(255, 255, 255, .14);

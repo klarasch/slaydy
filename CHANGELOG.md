@@ -19,6 +19,47 @@ the named thing has something to do or to delete), **port** (every fork has to a
 
 ## 2026-10-04
 
+### SKILL.md is under 400 lines
+**docs, fix**
+- The body was 552 lines, over the 500-line cap some skill registries enforce, and a fork
+  could only add to it. It is now 392. Reference material moved, text unchanged, into the docs
+  SKILL.md already pointed at: the brand setup procedure is now `BRANDING.md` §8, the update
+  procedure `UPDATING.md` §6, and the custom-content contract sits in `LAYOUTS.md` "Custom
+  content". Section numbers in SKILL.md are unchanged; §7, §8 and §9 are now short pointers.
+  No new files.
+- Tightened after test runs with smaller models: section dividers open groups of 4–7 content
+  slides and never fewer, a new hard rule against invented facts, and a word count after the
+  deck is written. The setup runbook now says to compute the `--accent-fg` contrast (4.5:1,
+  the brand's dark on a mid-tone accent), how to derive tokens the brand did not supply, gives
+  `SKILL.fork.md` as a template, and has `skeleton.html` copied from `LAYOUTS.md` character
+  for character.
+- `build.sh` no longer ships `site/` (upstream's landing page) inside the skill, where the
+  "copy everything" rule carried it into every generated deck folder.
+
+**Forks:** check. Nothing to port. If `SKILL.fork.md` or a brand's `themes/<name>.md` cites the
+setup or update steps by their old place in SKILL.md, point it at the new sections. A fork with
+its own top-level `site/` folder that must ship should rename it.
+
+### Saving is Download copy, everywhere
+**runtime, docs, feature, fix**
+- The save dialog on single-file decks and the folder picker with autosave on folder decks are
+  both removed. Every deck has one way to keep edits: **Download copy** (`D`, and now `⌘S` /
+  `Ctrl+S`, also while typing), a self-contained file named after the deck. It is in the edit bar
+  for every deck again, with its own download icon.
+- The amber "Unsaved changes — Save…" label and the first-edit toast are gone. Unsaved changes are
+  a small dot on Download copy, in view mode too, and its tooltip reads "Unsaved changes —
+  download a copy to keep them". Downloading clears it. Leaving edit mode with unsaved changes
+  still shows a reminder, now on folder decks as well, and closing the tab still asks.
+- `⌘S` used to fall through to the browser's own "Save page as".
+- The Delete slide button no longer shows ⌫ as its shortcut. ⌫ deletes a selected sticker or pin,
+  never a slide.
+- SKILL.md's hand-off, the README and UPDATING.md §5 describe the download only.
+
+**Forks:** check. The dot is `var(--tb-unsaved, var(--accent))`; set `--tb-unsaved` in a theme to
+recolour it. Delete any override of `.tb-btn.is-warn`, `.tb-btn.is-status` or `#btn-save`, they
+are gone. If `SKILL.fork.md` tells users about Save… or Save as…, reword it to Download copy
+(D or ⌘S). Revising is unchanged: `standalone.py --explode` on the downloaded file.
+
 ### Changelog entries carry a kind and a fork level
 **docs, feature** — Entries are now tagged `feature` or `fix`, and every Forks line opens
 with `nothing`, `check` or `port`. `site/changelog.html` renders this file with those as

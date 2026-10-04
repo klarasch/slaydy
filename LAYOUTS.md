@@ -487,9 +487,16 @@ the `<p>`.
 
 ## Custom content — `data-style` and `data-custom`
 
-Only on the user's explicit request; `SKILL.md` §7 carries the full contract and the reasons.
+Only on the user's explicit request (`SKILL.md` §7); this section is the full contract.
 Both attributes are namespaces the runtime will never define, which is what makes deck-authored
 CSS safe across runtime updates.
+
+Wanting the slide to look better is not a request. Reaching for custom code because a layout
+almost fits is the exact failure this section exists to prevent, because custom content costs
+things the layouts give away free: text inside a hand-over is not editable, a slide that hardcodes
+colour ignores a theme swap, and nothing custom maps to a non-HTML export. If a layout nearly
+fits, use the layout. If the user asks for something the layouts genuinely cannot express, build
+it here, and say once what it costs.
 
 `data-style="<name>"` is a styling hook and nothing more. The slide behaves exactly as it always
 did — text editable, reveals working — and the deck's CSS has something to target.
@@ -514,9 +521,22 @@ keyboard while it holds focus. For diagrams and widgets.
 </figure>
 ```
 
-A `<script data-deck>` goes in `<head>` too, waits for `DOMContentLoaded`, stays inside its own
-subtree, and marks anything it generates `data-gen`. No relative `url()` in deck CSS — the build
-refuses it, because images travel as files, not base64.
+The deck's own CSS and JS live in `<head>`, as one `<style data-deck>` and one
+`<script data-deck>`:
+
+- Every selector is scoped under its hook — `[data-style="pink"] …`, `[data-custom="wardley"] …`.
+  Never write a rule that targets a runtime class (`.cell`, `.timeline`, `.h1`) on its own. That
+  scoping is the entire safety mechanism: the runtime is replaced wholesale on every revise pass,
+  and a scoped rule has nothing of the runtime's to collide with.
+- Colours come from tokens (`var(--accent)`, `var(--fg)`, `color-mix(…)`) so the slide still
+  answers a theme swap — unless the user named a colour, which is theirs to name.
+- No relative `url()` in deck CSS. Images travel as files, so use an `<img>` or inline SVG;
+  `standalone.py` refuses the deck otherwise.
+- Script work waits for `DOMContentLoaded`, touches nothing outside its own subtree, and tags
+  whatever it generates `data-gen`, so saving the deck does not bake the generated copy in twice.
+
+On a later pass, custom blocks are the user's code. Do not rewrite, reformat, tidy or improve
+them. Touch one only when the request is about that slide.
 
 ---
 

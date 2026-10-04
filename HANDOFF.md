@@ -17,7 +17,7 @@ portrait viewports, fullscreen). Features: navigation, overview, transitions, pr
 reveal, count-up stats, Ken Burns, speaker notes, presenter view, overflow guard, edit mode
 with save-back to the folder, print-to-PDF. The UI rebuild has landed (auto-hiding bar with a
 bottom hover zone, full-word labels, undo, request-change popover, add-slide picker, notes
-drawer, autosave). The layout library is 20 classes (added: bento, number, compare, timeline,
+drawer). The layout library is 20 classes (added: bento, number, compare, timeline,
 image, gallery, and the callout family — annotated images with draggable numbered pins paired
 to a notes list: `callout` split view with `is-flipped`, and `callout-full` full-screen with a
 floating `callout__box`; pins carry the only sanctioned inline style, `left`/`top`). In edit
@@ -123,7 +123,7 @@ runtime and document it in `LAYOUTS.md`; never let a deck carry its own `<style>
 |---|---|---|
 | Fixed 1280×720 canvas, CSS-transform scaled; absolutely centred (not grid) | Predictable typography; what you see is what prints. Grid centring broke on portrait viewports | Hard |
 | Print stylesheet for PDF, not html2canvas | Rasterisers mangle fonts and gradients; print CSS keeps text selectable | Easy |
-| File System Access API for saving; base64 only as fallback | Real files in `images/`, no 2 MB photos becoming 2.7 MB of text. Also why handing a deck back to Claude costs ~3k tokens | Medium |
+| Saving is a download of one self-contained file; no File System Access API | Nobody is handed the folder deck, so in-place and folder saving had no user and were the shakiest code. Claude gets real files back with `standalone.py --explode` | Medium |
 | `contenteditable="plaintext-only"` | Plain contenteditable injects junk markup into the saved file | Easy, but output gets dirty |
 | Layout classes as master slides | The model *selects* a layout; this is the real source of visual consistency | Hard |
 | Motion as attributes (`data-transition`, `data-reveal`, …), tiers decided by the brief | "Bespoke" keynotes without per-deck code | Hard |

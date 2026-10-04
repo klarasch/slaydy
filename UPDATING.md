@@ -136,5 +136,30 @@ Open a deck that already existed before the update, and confirm in this order:
 2. Your extension layer still runs: `custom.js` behaviour, `custom.css` treatments.
 3. The new thing from the changelog actually shows up. If it doesn't, you are looking at a deck
    whose runtime you didn't refresh (§4) — the most common outcome by far.
-4. Save the deck (`⌘S` / **Download copy**) and diff it. A clean update changes nothing in the
-   markup you didn't ask for.
+4. Download the deck (`⌘S` / **Download copy**), run `standalone.py --explode` on the file and
+   diff its markup. A clean update changes nothing in the markup you didn't ask for.
+
+## 6. Runbook — the order to run it in
+
+The procedure behind `SKILL.md` §9, for Claude to follow when asked to take an update. Needs a
+shell and git; the mechanics are §2–§4 above.
+
+1. **Find both folders.** The fork is the working directory when it has `.slaydy-upstream` or
+   `SKILL.fork.md`; otherwise ask. Upstream is the sibling `slaydy/` checkout; otherwise ask,
+   or clone it beside the fork. Running this inside upstream itself is a mistake — say so.
+2. **Clean slate.** If the fork has uncommitted changes, show them and ask whether to commit
+   them first. Never stash or discard them yourself.
+3. **Pull upstream:** `git -C <upstream> pull --ff-only`. If that fails, stop and show why.
+4. **Take it:** from the fork, `<upstream>/take-update.sh`. With no stamp and differing files
+   it stops and lists them: show the list, and re-run with `--first-run` only when the user
+   agrees those are their edits. Never pass `--force` on your own.
+5. **Read what came in.** Summarise the upstream log it printed in plain words. Point out any
+   commit that lets the fork delete something it carries (an override, a workaround).
+6. **Skipped files** (exit code 1) are fork edits to upstream-owned files. For each, say where
+   the edit belongs instead — the script prints the map — and offer to move it. Don't move it
+   unasked.
+7. **Rebuild and check:** `./build.sh`, then a three-slide check deck from `dist/<name>/` as in
+   `BRANDING.md` §8.
+8. **Commit** the update with `.slaydy-upstream` ("Take slaydy <short sha>"), ask before
+   reinstalling (`rm -rf ~/.claude/skills/<name> && cp -R dist/<name> ~/.claude/skills/<name>`),
+   and offer to refresh the runtime in existing decks the user names (§4).

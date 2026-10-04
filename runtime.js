@@ -53,7 +53,7 @@
   // the two fatal authoring mistakes: slides written straight into <body>
   // without the .stage/.deck wrappers, and a theme <link> placed before
   // runtime.css (which would let the runtime's token defaults override the
-  // brand). Both repairs persist through save().
+  // brand). Both repairs persist through a download.
   (() => {
     if (!$(".deck")) {
       const strays = $$("body > section.slide");
@@ -83,7 +83,6 @@
   let editing = false;
   let overviewOpen = false;
   let notesOpen = false;
-  let dirHandle = null;
   const pending = new Map();          // "images/x.png" -> Blob
   let lastSlot = null;                // last clicked image slot
   let selectedSticker = null;
@@ -672,10 +671,9 @@
     if (!editing) { closePopover(); closePicker(); }
     if (editing) {
       toast(`Edit mode — click any text to change it. ${KEY.cmd}V pastes an image onto the slide.`);
-    } else if (document.documentElement.hasAttribute("data-standalone") && dirty && !hasTarget()) {
-      // standalone + unsaved + no folder handle: the edits only exist in this
-      // tab. Replaces the plain "Edit mode off" toast — never both.
-      toast(`Your edits are not saved — they live only in this tab. Press E, then ${canSaveInPlace() ? "Save…" : "Download copy"} to keep them.`, { duration: 9000 });
+    } else if (dirty) {
+      // the edits only exist in this tab. Replaces the plain "Edit mode off" toast — never both.
+      toast("Your edits live only in this tab. Download a copy to keep them.", { key: "D", duration: 9000 });
     } else {
       toast("Edit mode off");
     }
@@ -1570,87 +1568,6 @@
     r.readAsDataURL(blob);
   });
 
-  // A standalone deck is saved with the ordinary save dialog, one shot per click: no handle is
-  // kept and nothing autosaves. A page can't remember a file between sessions, so a "saves
-  // itself" state would only be true until the tab closed. The dialog's own replace
-  // confirmation is what guards overwriting a file someone received.
-  async function saveAsFile() {
-    const h = await showSaveFilePicker({
-      suggestedName: deckFileName(), id: "slaydy-save", startIn: "documents",
-      types: [{ description: "HTML deck", accept: { "text/html": [".html"] } }],
-    });
-    // build the file before opening the target, so a deck that fails to serialise never touches it
-    const html = await serialize({ inline: true });   // pending images are inlined here, so they stay pending
-    const w = await h.createWritable();
-    await w.write(html);
-    await w.close();
-    return h.name;
-  }
-
-  async function save() {
-    // a standalone deck (single file, everything inlined) saves itself as a
-    // single file again — no images/ folder, assets stay baked in
-    const standalone = document.documentElement.hasAttribute("data-standalone");
-    // a folder handle is no use to a standalone: it saves through the save dialog
-    // (Safari, Firefox: a download)
-    if (standalone) {
-      if (!canSaveInPlace()) { await downloadStandalone(); return true; }
-      try {
-        const name = await saveAsFile();
-        toast(`Saved as ${name}.`);
-        return true;
-      } catch (err) {
-        if (err.name === "AbortError") return false;
-        console.warn(err);
-        // the dialog itself was refused (an embedded preview, a locked-down browser):
-        // nothing was picked, so a download is what the click can still deliver
-        if (err.name === "SecurityError" || err.name === "NotAllowedError") {
-          pickerBlocked = true; updateSaveUI();
-          await downloadStandalone();
-          return true;
-        }
-        toast("Couldn't write that file. Try another location, or press D to download a copy.");
-        return false;
-      }
-    }
-    if (window.showDirectoryPicker) {
-      try {
-        if (!dirHandle) {
-          dirHandle = await showDirectoryPicker({ mode: "readwrite", id: "slaydy" });
-        }
-        if (!standalone && pending.size) {
-          const imgs = await dirHandle.getDirectoryHandle("images", { create: true });
-          for (const [rel, blob] of pending) {
-            const fh = await imgs.getFileHandle(rel.replace("images/", ""), { create: true });
-            const w = await fh.createWritable();
-            await w.write(blob);
-            await w.close();
-          }
-        }
-        let name = location.pathname.split("/").pop() || "deck.html";
-        if (!/\.html?$/i.test(name)) name = "deck.html";
-        const fh = await dirHandle.getFileHandle(name, { create: true });
-        const w = await fh.createWritable();
-        await w.write(await serialize({ inline: standalone }));
-        await w.close();
-        pending.clear();
-        return true;
-      } catch (err) {
-        if (err.name === "AbortError") return false;
-        console.warn(err);
-        if (dirHandle) { toast("Couldn't write to the folder — your edits are still in this tab. Use Download copy to keep them."); return false; }   // never download unasked from a background save
-        toast("Folder write unavailable — falling back to a standalone download.");
-      }
-    }
-    const blob = new Blob([await serialize({ inline: true })], { type: "text/html" });
-    const a = document.createElement("a");
-    a.href = URL.createObjectURL(blob);
-    a.download = deckFileName();
-    a.click();
-    toast("Downloaded a self-contained copy — runtime, theme and images baked in.");
-    return true;
-  }
-
   // named after the deck, like standalone.py does
   const deckFileName = (suffix = "") =>
     ((document.title || "").replace(/[\\/:*?"<>|]/g, "").trim() || "deck") + suffix + ".html";
@@ -1663,7 +1580,7 @@
       a.href = URL.createObjectURL(blob);
       a.download = deckFileName(suffix);
       a.click();
-      if (!drop && !hasTarget()) { dirty = false; updateSaveUI(); }   // the changes are now in a file
+      if (!drop) { dirty = false; updateSaveUI(); }   // the changes are now in a file
       if (done) return toast(done);
       const pendingCount = $$("[data-note]").length;
       toast(pendingCount
@@ -1675,63 +1592,25 @@
     }
   }
 
-  /* -------------------------------------------------------------- autosave */
-  let dirty = false, saving = false;
-  const hasTarget = () => !!dirHandle;   // a folder being autosaved into
-  // file pickers are refused inside a cross-origin frame (an embedded preview), so a
-  // framed standalone offers the download from the start; pickerBlocked is the same
-  // answer learned the hard way
-  let pickerBlocked = false;
-  const framed = (() => { try { return self !== top && !top.location.href; } catch { return true; } })();
-  const canSaveInPlace = () => document.documentElement.hasAttribute("data-standalone")
-    ? !!window.showSaveFilePicker && !framed && !pickerBlocked : !!window.showDirectoryPicker;
-  const scheduleAutosave = debounce(async () => {
-    if (!hasTarget() || saving) return;
-    const v = deckVersion;
-    saving = true; updateSaveUI();
-    const ok = await save();
-    saving = false;
-    // an edit made while the write was in flight isn't in the file: stay dirty and write again
-    if (ok && v === deckVersion) dirty = false;
-    updateSaveUI();
-    if (ok && v !== deckVersion) scheduleAutosave();
-  }, 1500);
-
+  /* ------------------------------------------------------- unsaved changes */
+  // A deck is one file the browser can't write back to, so the only save is a download
+  // (D, ⌘S, the Download copy button). Until then the button carries a dot and says so.
+  let dirty = false;
   let deckVersion = 0;            // bumped on every edit; the presenter window refetches the deck when it changes
   const deckSession = Math.random().toString(36).slice(2);   // version restarts at 0 on reload; the session id keeps a reloaded deck distinct
   const deckV = () => deckSession + ":" + deckVersion;
-  let nudgedSave = false;
   function markDirty() {
     deckVersion++;
     dirty = true;
-    // nothing is written anywhere yet; say so once, at the first edit, with the way out
-    if (!nudgedSave && !hasTarget() && document.documentElement.hasAttribute("data-standalone") && $("#btn-save")) {
-      nudgedSave = true;
-      toast("Changes aren't saved yet.", canSaveInPlace()
-        ? { action: "Save…", onAction: onSaveClick, duration: 9000 }
-        : { action: "Download copy", onAction: () => downloadStandalone(), duration: 9000 });
-    }
     updateSaveUI();
-    if (hasTarget()) scheduleAutosave();
   }
 
+  const SAVE_TIP = "Download the deck as one self-contained .html";
   function updateSaveUI() {
-    const el = $("#btn-save");
-    if (!el) return;
-    const label = $(".js-save-label", el);
-    if (!label) return;
-    if (!canSaveInPlace()) { label.textContent = "Download copy"; el.classList.remove("is-status", "is-warn"); return; }
-    const unsaved = dirty && !hasTarget();
-    el.classList.toggle("is-warn", unsaved);
-    if (!hasTarget()) { label.textContent = unsaved ? "Unsaved changes — Save…" : "Save…"; el.classList.remove("is-status"); return; }
-    el.classList.add("is-status");
-    label.textContent = saving || dirty ? "Saving…" : "Saved";
-  }
-
-  async function onSaveClick() {
-    if (hasTarget()) return; // now a passive status, not a button
-    const ok = await save();
-    if (ok) { dirty = false; updateSaveUI(); if (hasTarget()) toast("Saved. Autosaving from now on."); }
+    const b = $("#btn-single");
+    if (!b) return;
+    b.classList.toggle("has-unsaved", dirty);
+    b.dataset.tip = dirty ? "Unsaved changes — download a copy to keep them" : SAVE_TIP;
   }
 
   /* ------------------------------------------------------------ undo / redo */
@@ -2248,7 +2127,7 @@
   }
 
   /* ---------------------------------------------------------------- chrome */
-  const ICONS = `<svg width="0" height="0" style="position:absolute" aria-hidden="true" data-runtime><symbol id="i-prev" viewBox="0 0 24 24"><path d="M15 6l-6 6 6 6"/></symbol><symbol id="i-next" viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></symbol><symbol id="i-grid" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></symbol><symbol id="i-theme" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 3a9 9 0 0 1 0 18z" fill="currentColor" stroke="none"/></symbol><symbol id="i-present" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/></symbol><symbol id="i-pdf" viewBox="0 0 24 24"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/><path d="M12 11v6M9.5 14.5L12 17l2.5-2.5"/></symbol><symbol id="i-edit" viewBox="0 0 24 24"><path d="M4 20h4l10.5-10.5a2.1 2.1 0 0 0-3-3L5 17z"/><path d="M13 7l3 3"/></symbol><symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol><symbol id="i-dup" viewBox="0 0 24 24"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/></symbol><symbol id="i-trash" viewBox="0 0 24 24"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/></symbol><symbol id="i-spark" viewBox="0 0 24 24"><path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z"/><path d="M19 16l.7 2 2 .7-2 .7-.7 2-.7-2-2-.7 2-.7z"/></symbol><symbol id="i-undo" viewBox="0 0 24 24"><path d="M9 14L4 9l5-5"/><path d="M4 9h10a6 6 0 0 1 0 12h-3"/></symbol><symbol id="i-save" viewBox="0 0 24 24"><path d="M5 3h11l3 3v15H5z"/><path d="M8 3v6h8V3M8 21v-7h8v7"/></symbol><symbol id="i-check" viewBox="0 0 24 24"><path d="M5 12l5 5L20 7"/></symbol><symbol id="i-help" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M9.5 9.5a2.5 2.5 0 1 1 3.5 2.3c-.7.4-1 1-1 1.7M12 17h.01"/></symbol><symbol id="i-notes" viewBox="0 0 24 24"><path d="M5 4h14v16H5z"/><path d="M8 9h8M8 13h8M8 17h5"/></symbol><symbol id="i-image" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="8.5" cy="10" r="1.5"/><path d="M21 16l-5-5-8 8"/></symbol><symbol id="i-warn" viewBox="0 0 24 24"><path d="M12 4l9 16H3z"/><path d="M12 10v4M12 17h.01"/></symbol><symbol id="i-close" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></symbol><symbol id="i-sliders" viewBox="0 0 24 24"><path d="M4 8h9M17 8h3M4 16h3M11 16h9"/><circle cx="15" cy="8" r="2"/><circle cx="9" cy="16" r="2"/></symbol><symbol id="i-text" viewBox="0 0 24 24"><path d="M5 7V5h14v2M12 5v14M9 19h6"/></symbol><symbol id="i-first" viewBox="0 0 24 24"><path d="M17 6l-6 6 6 6"/><path d="M11 6l-6 6 6 6"/></symbol></svg>`;
+  const ICONS = `<svg width="0" height="0" style="position:absolute" aria-hidden="true" data-runtime><symbol id="i-prev" viewBox="0 0 24 24"><path d="M15 6l-6 6 6 6"/></symbol><symbol id="i-next" viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></symbol><symbol id="i-grid" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></symbol><symbol id="i-theme" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 3a9 9 0 0 1 0 18z" fill="currentColor" stroke="none"/></symbol><symbol id="i-present" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/></symbol><symbol id="i-pdf" viewBox="0 0 24 24"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/><path d="M12 11v6M9.5 14.5L12 17l2.5-2.5"/></symbol><symbol id="i-edit" viewBox="0 0 24 24"><path d="M4 20h4l10.5-10.5a2.1 2.1 0 0 0-3-3L5 17z"/><path d="M13 7l3 3"/></symbol><symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol><symbol id="i-dup" viewBox="0 0 24 24"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/></symbol><symbol id="i-trash" viewBox="0 0 24 24"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/></symbol><symbol id="i-spark" viewBox="0 0 24 24"><path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z"/><path d="M19 16l.7 2 2 .7-2 .7-.7 2-.7-2-2-.7 2-.7z"/></symbol><symbol id="i-undo" viewBox="0 0 24 24"><path d="M9 14L4 9l5-5"/><path d="M4 9h10a6 6 0 0 1 0 12h-3"/></symbol><symbol id="i-download" viewBox="0 0 24 24"><path d="M12 4v11M7 10.5l5 5 5-5M5 20h14"/></symbol><symbol id="i-save" viewBox="0 0 24 24"><path d="M5 3h11l3 3v15H5z"/><path d="M8 3v6h8V3M8 21v-7h8v7"/></symbol><symbol id="i-check" viewBox="0 0 24 24"><path d="M5 12l5 5L20 7"/></symbol><symbol id="i-help" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M9.5 9.5a2.5 2.5 0 1 1 3.5 2.3c-.7.4-1 1-1 1.7M12 17h.01"/></symbol><symbol id="i-notes" viewBox="0 0 24 24"><path d="M5 4h14v16H5z"/><path d="M8 9h8M8 13h8M8 17h5"/></symbol><symbol id="i-image" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="8.5" cy="10" r="1.5"/><path d="M21 16l-5-5-8 8"/></symbol><symbol id="i-warn" viewBox="0 0 24 24"><path d="M12 4l9 16H3z"/><path d="M12 10v4M12 17h.01"/></symbol><symbol id="i-close" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></symbol><symbol id="i-sliders" viewBox="0 0 24 24"><path d="M4 8h9M17 8h3M4 16h3M11 16h9"/><circle cx="15" cy="8" r="2"/><circle cx="9" cy="16" r="2"/></symbol><symbol id="i-text" viewBox="0 0 24 24"><path d="M5 7V5h14v2M12 5v14M9 19h6"/></symbol><symbol id="i-first" viewBox="0 0 24 24"><path d="M17 6l-6 6 6 6"/><path d="M11 6l-6 6 6 6"/></symbol></svg>`;
 
   const SHORTCUTS = [
     ["→ / space", "Next"], ["←", "Previous"], ["R / Home", "Restart from slide 1"], ["End", "Last slide"],
@@ -2256,7 +2135,7 @@
     ["P", "Export PDF"], ["C", "Copy slide as PNG"], ["D", "Download single file"], ["F", "Fullscreen"], ["?", "This sheet"], ["Esc", "Close / finish editing"],
     ["↑↓←→", "Overview: select slide"], ["Enter", "Overview: open selected slide"],
     ["1…9", "Overview: type a slide number"], [`${KEY.alt}arrows`, "Overview: reorder slide (edit mode)"],
-    [`${KEY.cmd}Z`, "Undo"], [`${KEY.cmd}${KEY.shift}Z`, "Redo"], [`${KEY.cmd}D`, "Duplicate slide"], [KEY.del, "Delete selected sticker"],
+    [`${KEY.cmd}Z`, "Undo"], [`${KEY.cmd}${KEY.shift}Z`, "Redo"], [`${KEY.cmd}D`, "Duplicate slide"], [`${KEY.cmd}S`, "Download single file"], [KEY.del, "Delete selected sticker"],
     ["[ / ]", "Send selected sticker or text box backward / forward — past the end it goes behind or in front of the text"], [`${KEY.alt}drag`, "Move a sticker without snapping to margin and centre guides"], [`${KEY.alt}click`, "Select a sticker that sits behind text"], ["Rotate knob", "Turn a sticker or text box (⇧ = 15° steps)"], ["Arrows", `Nudge selected sticker / pin (${KEY.shift} = bigger)`],
     ["Tab", "Next text box on the slide"], ["↑ / ↓", "At text edge: jump to text above / below"],
     [`${KEY.cmd}B`, "Emphasise selection (edit mode)"],
@@ -2363,7 +2242,7 @@
       ${showTheme ? btn({ id: "btn-theme", icon: "theme", label: "Theme", key: "T", tip: "Switch light/dark theme" }) : ""}
       ${btn({ id: "btn-presenter", icon: "present", label: "Presenter", key: "S", tip: "Open presenter view with speaker notes" })}
       ${btn({ id: "btn-print", icon: "pdf", label: "Export", key: "P", tip: "Export — PDF, or this slide as a PNG" })}
-      ${btn({ id: "btn-single", icon: "save", label: "Download copy", key: "D", tip: "Download the deck with your changes as one self-contained .html" })}
+      ${btn({ id: "btn-single", icon: "download", label: "Download copy", key: "D", tip: SAVE_TIP })}
       <span class="tb-sep"></span>
       ${btn({ id: "btn-edit", icon: "edit", label: "Edit", key: "E", tip: "Switch to edit mode" })}
       ${btn({ id: "btn-help", icon: "help", cls: "icon-only", key: "?", tip: "Keyboard shortcuts" })}
@@ -2376,14 +2255,14 @@
       ${btn({ id: "btn-add", icon: "plus", label: "Add slide", tip: "Insert a new slide after this one" })}
       ${btn({ id: "btn-text", icon: "text", label: "Text box", tip: "Add a free-floating text box to this slide" })}
       ${btn({ id: "btn-dup", icon: "dup", cls: "icon-only", key: KEY.cmd + "D", tip: "Duplicate slide" })}
-      ${btn({ id: "btn-del", icon: "trash", cls: "icon-only", key: KEY.del, tip: "Delete slide" })}
+      ${btn({ id: "btn-del", icon: "trash", cls: "icon-only", tip: "Delete slide" })}
       <span class="tb-sep"></span>
       ${btn({ id: "btn-opts", icon: "sliders", label: "Options", tip: "Per-slide options — transition, footer, brand extras" })}
       ${btn({ id: "btn-note", icon: "spark", label: "Request change", tip: "Flag this slide for Claude to revise later" })}
       ${btn({ id: "btn-notes", icon: "notes", label: "Speaker notes", tip: "Add notes for presenter view and printed PDFs" })}
       <span class="tb-sep"></span>
       ${btn({ id: "btn-undo", icon: "undo", cls: "icon-only", key: KEY.cmd + "Z", tip: "Undo" })}
-      <button id="btn-save" class="tb-btn" data-tip="Save the deck with your changes — or, where the browser can't save a file, download a copy" aria-label="Save"><svg class="icon"><use href="#i-save"/></svg><span class="js-save-label">Save</span></button>
+      ${btn({ id: "btn-single", icon: "download", label: "Download copy", key: "D", tip: SAVE_TIP })}
       <span class="tb-sep"></span>
       ${btn({ id: "btn-done", icon: "check", label: "Done", cls: "primary", tip: "Exit edit mode" })}
     `;
@@ -2408,7 +2287,6 @@
       $("#btn-note").onclick = e => openPopover("note", e.currentTarget);
       $("#btn-notes").onclick = toggleNotesDrawer;
       $("#btn-undo").onclick = undo;
-      $("#btn-save").onclick = onSaveClick;
       $("#btn-done").onclick = () => toggleEdit(false);
     }
     updateSaveUI();
@@ -3328,6 +3206,12 @@
         e.shiftKey ? redo() : undo();
         return;
       }
+      // same as D: the browser's own "Save page as" would write the page without the deck's save pass
+      if (meta && !e.altKey && e.key.toLowerCase() === "s") {
+        e.preventDefault();
+        if (!e.repeat) downloadStandalone();
+        return;
+      }
       if (meta && !typing && e.key.toLowerCase() === "d" && editing) {
         e.preventDefault(); duplicateSlide(); return;
       }
@@ -3475,7 +3359,7 @@
       if (!location.search.includes("notes")) document.body.classList.remove("show-notes");
     });
     addEventListener("beforeunload", e => {
-      if (dirty && !hasTarget()) { e.preventDefault(); e.returnValue = ""; }
+      if (dirty) { e.preventDefault(); e.returnValue = ""; }
     });
 
     initBulletEditing();

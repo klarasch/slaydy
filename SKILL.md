@@ -85,7 +85,7 @@ Store the settled brief in `<head>`:
 
 ## 3. Generate
 
-**Set up the folder.** Create an output folder named from the topic in kebab-case
+**Set up the folder.** Always create a new output folder named from the topic in kebab-case
 (`q3-platform-review/`) next to the user's working files (in Cowork: inside the folder the user
 shared with you) — never inside this skill's folder.
 
@@ -128,7 +128,8 @@ own files.
 
 - Open with `slide--title`.
 - Add `slide--agenda` only if there are more than 8 content slides.
-- A `slide--section` divider every 4–7 slides.
+- A `slide--section` divider opens each group of 4–7 content slides, never fewer: a 15-slide
+  deck has two, a deck of 10 or under has none.
 - Vary layouts. Never two `bullets` in a row — reach for `bento`, `compare` or `timeline`
   instead of a second list. Reach for `table` when the content is genuinely a matrix — an
   option × criterion grid — not to escape a long list. At most one `stats`, one `number` and
@@ -160,8 +161,10 @@ own files.
 | gallery | 2–4 images · headline ≤ 8 words |
 | full / image / end | headline ≤ 8 words · lead ≤ 20 words |
 
-Count the words. When content will not fit, split the slide or cut the content — never shrink
-the type, which you cannot do anyway.
+Count the words on every slide once the deck is written, and fix any that are over;
+`LAYOUTS.md`, "Density budgets", has the same ceilings with every sub-element spelled out. When
+content will not fit, split the slide or cut the content — never shrink the type, which you
+cannot do anyway.
 
 **Tier → motion.**
 
@@ -214,14 +217,13 @@ genuinely unavailable, say so and point at the deck's **Download copy** toolbar 
 **Hand off in four lines, no more.** The last line is the deck's tl;dr, not a bare key list —
 in 2–4 sentences, adapted to your own phrasing: it opens in any browser and stays editable;
 press E (or click Edit) to change any text, ? shows every shortcut, P makes a PDF; edits live
-only in that browser tab until they save: in Chrome, Save… (a normal save dialog; nothing autosaves), or D — "Download copy" — which downloads an updated copy.
+only in that browser tab until they press D or ⌘S ("Download copy"), which downloads an updated copy.
 
 ```
 Deck: ./q3-platform-review/Q3 Platform Review.html — 18 slides, one file. Open it (Chrome), send it as is.
 Source: ./q3-platform-review/deck.html — I edit this for revisions; you don't need to open it.
 It opens in any browser and stays editable — press E (or click Edit) to change any text, ? shows
-every shortcut, P makes a PDF. Edits live in that tab until you save — Save… (Chrome: a normal
-save dialog, nothing autosaves) or D ("Download copy").
+every shortcut, P makes a PDF. Edits live in that tab until you press D ("Download copy").
 ```
 
 When no folder outlives the session (chat), skip the Source line — the workspace is in `/tmp`
@@ -343,51 +345,12 @@ Do not screenshot every slide by default. One overview screenshot, if the user w
 
 The layouts cover the deck. Now and then they do not cover the *slide*: a Wardley map, a
 hand-drawn diagram, a small interactive widget, one card deliberately off-brand. The runtime
-carries all of that, under one condition — **the user asked for it.**
+carries all of that, under one condition — **the user asked for it.** Wanting the slide to look
+better is not a request, and neither is a layout that almost fits: use the layout.
 
-Wanting the slide to look better is not a request. Reaching for custom code because a layout
-almost fits is the exact failure this section exists to prevent, because custom content costs
-things the layouts give away free: text inside a hand-over is not editable, a slide that hardcodes
-colour ignores a theme swap, and nothing custom maps to a non-HTML export. If a layout nearly
-fits, use the layout. If the user asks for something the layouts genuinely cannot express, build
-it here, and say once what it costs.
-
-Two hooks, promising different things.
-
-**`data-style="<name>"` — a styling hook.** The runtime behaves exactly as it always does: text
-stays editable, reveals still work, nothing changes. The attribute exists purely so deck CSS has
-something safe to aim at. This is what a deliberately pink bento card wants.
-
-```html
-<article class="cell" data-style="pink"><h3 class="h3">…</h3><p class="body">…</p></article>
-```
-
-**`data-custom="<name>"` — a hand-over.** Inside it the runtime does nothing: no editing, no
-decoration, no reveal steps, no click-to-advance, and while the content holds focus the keyboard
-is its own. This is for diagrams and widgets, whose internals are not the runtime's business.
-
-```html
-<figure data-custom="wardley">
-  <svg viewBox="0 0 900 300" width="100%">…</svg>
-</figure>
-```
-
-The deck's own CSS and JS live in `<head>`, as one `<style data-deck>` and one
-`<script data-deck>`:
-
-- Every selector is scoped under its hook — `[data-style="pink"] …`, `[data-custom="wardley"] …`.
-  Never write a rule that targets a runtime class (`.cell`, `.timeline`, `.h1`) on its own. That
-  scoping is the entire safety mechanism: the runtime is replaced wholesale on every revise pass,
-  and a scoped rule has nothing of the runtime's to collide with.
-- Colours come from tokens (`var(--accent)`, `var(--fg)`, `color-mix(…)`) so the slide still
-  answers a theme swap — unless the user named a colour, which is theirs to name.
-- No relative `url()` in deck CSS. Images travel as files, so use an `<img>` or inline SVG;
-  `standalone.py` refuses the deck otherwise.
-- Script work waits for `DOMContentLoaded`, touches nothing outside its own subtree, and tags
-  whatever it generates `data-gen`, so saving the deck does not bake the generated copy in twice.
-
-On a later pass, custom blocks are the user's code. Do not rewrite, reformat, tidy or improve
-them. Touch one only when the request is about that slide.
+When it is asked for, read `LAYOUTS.md`, "Custom content", first and follow its contract:
+`data-style` to restyle an element, `data-custom` to hand a subtree over, every rule scoped
+under its hook. Say once what it costs.
 
 ---
 
@@ -395,137 +358,16 @@ them. Touch one only when the request is about that slide.
 
 Inputs: a website URL, brand guidelines PDF, and/or a logo file. Any one is enough.
 
-**Decide where the brand goes, before extracting anything.** A brand lives in a fork: its own
-git repo, a sibling of an upstream slaydy checkout, so `take-update.sh` can update it later
-(`UPDATING.md` §2). Never write brand files into upstream itself, and never into an installed
-copy of the skill (`~/.claude/skills/…`) — neither can take an update. Look at where you are:
-
-1. **Already in a fork** — the working directory is a git repo with `runtime.js` and either
-   `SKILL.fork.md` or `.slaydy-upstream`, and it is not upstream. Write there. Find the upstream
-   checkout (a sibling `slaydy/` folder; otherwise ask for its path) and remember it for step 4.
-2. **In upstream** — the working directory is a slaydy checkout with no `SKILL.fork.md` (its
-   `origin` is usually `github.com/klarasch/slaydy`). Don't write here. Make the fork beside it.
-3. **Anywhere else, with a shell** — find an upstream checkout (`~/Code/slaydy` or a sibling
-   `slaydy/`). If there is none, say where you will clone it and clone
-   `https://github.com/klarasch/slaydy.git` — the one upstream folder serves every fork on the
-   machine.
-4. **In chat, no git** (Claude desktop, Claude.ai, Cowork) — the user installed slaydy as an
-   uploaded skill and won't touch a terminal. The deliverable is a new skill zip, built in your
-   sandbox; skip "Making the fork" and "Build, commit, install" below and follow
-   **Chat install** at the end of this section instead.
-
-Making the fork (cases 2 and 3). Name it `<brand>-decks` unless the user names it, next to
-upstream:
-
-```bash
-git clone <upstream> <parent>/<name>                  # local clone: same commit, shared history
-git -C <parent>/<name> remote rename origin upstream-slaydy
-cd <parent>/<name> && <upstream>/take-update.sh       # every file matches: writes .slaydy-upstream
-```
-
-Refuse if `<parent>/<name>` exists and is not empty — ask for another name. If upstream has
-uncommitted changes the stamp step refuses too; say so and ask whether to commit upstream or
-clone from `https://github.com/klarasch/slaydy.git` instead. A GitHub remote for the fork is
-the user's call: offer `gh repo create <name> --private --source . --push` at the end, and run
-it only on a yes.
-
-**Extract** — colours (accent, background, text), typefaces, and the logo. From a URL, read the
-rendered page and its CSS custom properties; from a PDF, the palette and type pages.
-
-**Show before writing.** Present the nine resolved tokens and the draft voice rules for review in
-one message. Two things to say while you do:
-
-- `--accent-fg` must have real contrast against `--accent` — section dividers fill with the accent
-  and set all their text to `--accent-fg`.
-- Corporate brands almost always want `--wash-opacity: 0`. The gradient wash reads as
-  "startup deck".
-
-**Then write** into the fork (or `slaydy-brand/`, case 4). Files:
-
-- `themes/<name>.css` — the nine tokens plus font overrides. Follow `BRANDING.md`.
-- `themes/<name>.md` — voice: 5–10 concrete, checkable rules covering tone, banned words, how
-  headlines are written, any mandatory slide, layouts to prefer or avoid.
-- `fonts/` + `@font-face` in the theme file, if fonts were supplied as files.
-- `images/logo.svg`, if supplied.
-- `themes/default` — one line, this brand's name.
-- `SKILL.fork.md` — the install's own skill identity, so it registers as the brand's deck skill
-  rather than as a second generic one (`CUSTOMIZING.md`, Layer 0): frontmatter with `name:`
-  (`<brand>-decks` unless the user names it) and a `description:` that names the brand in its
-  first clause and keeps the trigger phrases; below it, two to five lines of standing orders —
-  the theme to link, that no theme question is ever asked. `./build.sh` composes the shipped
-  `SKILL.md` from it.
-- `skeleton.html` — the deck skeleton from `LAYOUTS.md` with this install's wiring baked in:
-  the theme link, the brand's font `<link>`s (or none, when `fonts/` and `@font-face` carry
-  them — then drop the Google Fonts line), `data-logo`, and `data-themes` only if the install
-  deliberately offers several surfaces. Generation copies it exactly (§3), so nothing about
-  the wiring is ever re-derived.
-
-**Build, commit, install.** In the fork:
-
-1. `./build.sh` — it takes the name from `SKILL.fork.md` and writes `dist/<name>/` and
-   `dist/<name>-skill.zip`.
-2. Generate a three-slide check deck from `dist/<name>/` into a scratch folder and open it: the
-   theme, fonts and logo must show. Fix the brand files, not the runtime, if they don't.
-3. Commit the brand and `.slaydy-upstream` as one commit ("<Brand> brand"). `dist/` is ignored.
-4. Ask before installing, then `cp -R dist/<name> ~/.claude/skills/<name>`. If a generic
-   `slaydy` install sits beside it, say so: two deck skills compete to trigger, and the user
-   may want the generic one removed.
-
-**Close by telling them how to share it:** send `dist/<name>-skill.zip`, or push the fork and
-have people build from it. Everyone who installs it generates decks in the brand with no
-further setup. Updates are one prompt away — §9.
-
-**Chat install** (case 4). After the user says go:
-
-1. Copy this installed skill's folder into a scratch `<name>/` folder (`<brand>-decks` unless
-   the user names it). It is already a build: no demo deck, no scripts.
-2. Write the brand files listed above into it. Also write `SKILL.fork.md` as a file in the
-   folder: it is how a later update recovers the skill's identity.
-3. Compose `SKILL.md` the way `build.sh` does: replace its frontmatter with `SKILL.fork.md`'s,
-   retitle the first `# ` heading to `# <name>`, and put `SKILL.fork.md`'s body directly under
-   that heading. Leave the rest of the body byte for byte.
-4. Check a three-slide deck generated from `<name>/` renders the brand, then zip the folder as
-   `<name>-skill.zip` with `<name>/` at the root of the zip, and hand it over.
-5. Close with: "Upload `<name>-skill.zip` in Settings › Capabilities › Skills, then turn off the
-   plain slaydy skill so the two don't compete. Send the same zip to teammates."
-
-**Chat update.** When the user has a newer slaydy zip installed or attached and asks to update
-their branded skill: start from the new slaydy folder, bring over every file from the branded
-skill that `UPDATING.md` §1 does not list as a release's (theme, voice, `themes/default`,
-`fonts/`, `images/`, `custom*`, `skeleton.html`, `SKILL.fork.md`, their own icons), then compose
-`SKILL.md` from the branded skill's `SKILL.fork.md` as in step 3. If it has none, recover the head
-from its current `SKILL.md`: the frontmatter, and the lines between the title and upstream's
-first `**` paragraph. Check, zip and close as in steps 4–5, telling the user to upload the new
-zip in place of the old one. Say what changed in the new slaydy if its zip carries a changelog.
-
-`BRANDING.md` has the details — token semantics, `@font-face`, logo placement, a worked voice
-file. Read it before writing a theme.
+**Read `BRANDING.md` in this skill's folder, then follow its "Setup runbook" section step by
+step.** The one rule to hold before you open it: a brand lives in a fork (or, in chat, a new
+skill zip). Never write brand files into upstream itself or into an installed copy of the skill.
 
 ---
 
 ## 9. Update — taking a new slaydy into a fork
 
-Needs a shell and git. The mechanics are `UPDATING.md` §2–§4; this is the order to run them in.
-
-1. **Find both folders.** The fork is the working directory when it has `.slaydy-upstream` or
-   `SKILL.fork.md`; otherwise ask. Upstream is the sibling `slaydy/` checkout; otherwise ask,
-   or clone it beside the fork. Running this inside upstream itself is a mistake — say so.
-2. **Clean slate.** If the fork has uncommitted changes, show them and ask whether to commit
-   them first. Never stash or discard them yourself.
-3. **Pull upstream:** `git -C <upstream> pull --ff-only`. If that fails, stop and show why.
-4. **Take it:** from the fork, `<upstream>/take-update.sh`. With no stamp and differing files
-   it stops and lists them: show the list, and re-run with `--first-run` only when the user
-   agrees those are their edits. Never pass `--force` on your own.
-5. **Read what came in.** Summarise the upstream log it printed in plain words. Point out any
-   commit that lets the fork delete something it carries (an override, a workaround).
-6. **Skipped files** (exit code 1) are fork edits to upstream-owned files. For each, say where
-   the edit belongs instead — the script prints the map — and offer to move it. Don't move it
-   unasked.
-7. **Rebuild and check:** `./build.sh`, then a three-slide check deck from `dist/<name>/` as in
-   §8.
-8. **Commit** the update with `.slaydy-upstream` ("Take slaydy <short sha>"), ask before
-   reinstalling (`rm -rf ~/.claude/skills/<name> && cp -R dist/<name> ~/.claude/skills/<name>`),
-   and offer to refresh the runtime in existing decks the user names (`UPDATING.md` §4).
+Needs a shell and git. Follow `UPDATING.md` §6, the runbook, in order. In chat, with no git,
+follow "Chat update" in `BRANDING.md`'s setup runbook instead.
 
 ---
 
@@ -544,6 +386,8 @@ Needs a shell and git. The mechanics are `UPDATING.md` §2–§4; this is the or
 - Never regenerate a deck that carries `data-note` or hand edits. Edit in place.
 - Never ask more than one round of questions.
 - Never invent a layout class, a theme name, or an image path.
+- Never invent a fact: no number, result, customer claim or quote the user did not give. Where
+  their facts stop, keep the copy general.
 - Never type a separator character to join two phrases — no `·`, `•`, `|`, `—` or `/` in a
   `.meta` line, eyebrow, chip or caption. The middle dot in particular is the loudest tell
   that a deck was machine-written. `.meta` holds bare `<span>`s; the runtime draws the

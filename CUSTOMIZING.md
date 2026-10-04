@@ -242,7 +242,7 @@ came to implement an asset-baking hook locally after upstream had already shippe
 | `slaydy.snapshot()` `slaydy.toast()` | undoable extension edits; the runtime's message UI | JS |
 | `slaydy.serialize({ inline })` | the deck as a string, folder-relative or single-file | JS |
 | `data-gen` `data-runtime` `data-runtime="print"` | mark injected DOM so saves strip it; keep print-only chrome | attributes |
-| `data-style` `data-custom` | per-slide styling hook; hand-over the runtime leaves alone | attributes, `SKILL.md` §7 |
+| `data-style` `data-custom` | per-slide styling hook; hand-over the runtime leaves alone | attributes, `LAYOUTS.md` "Custom content" |
 
 ## Layer 4 — your own layouts
 

@@ -147,7 +147,7 @@ from pathlib import Path
 
 out = Path(sys.argv[1]); root = Path(".")
 CONTRACT_DOCS = {"LAYOUTS.md", "BRANDING.md", "CUSTOMIZING.md", "UPDATING.md"}
-NEVER = {"dist", "node_modules", "__pycache__", "SKILL.md", "SKILL.fork.md"}
+NEVER = {"dist", "site", "node_modules", "__pycache__", "SKILL.md", "SKILL.fork.md"}   # site/ is upstream's landing page
 
 def dev_only(rel: Path) -> bool:
     top = rel.parts[0]

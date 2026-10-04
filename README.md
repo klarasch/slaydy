@@ -55,21 +55,14 @@ One bar, full words. Hover any button for its shortcut; `?` lists them all.
 - **Request change** — a change request for the next Claude pass, stored on the slide as `data-note` and shown as a chip while editing.
 - **Speaker notes** — a drawer beside the slide; shown in Presenter view.
 - **Undo** — ⌘Z / ⌘⇧Z across every edit, including slide operations.
-- **Save…** — see below. A deck in a folder autosaves after the first save and just shows "Saved"; a single-file deck never autosaves.
+- **Download copy** — see below. `D` and ⌘S do the same.
 
-## Saving without base64
+## Keeping your edits
 
-Press **Save…** and Chrome asks for a folder once. Pick the deck's own folder.
-The runtime writes any newly added images into `images/` as real files and rewrites
-`deck.html` in place, with markup still pointing at relative paths.
-
-A single-file deck can't remember a file between sessions, so it never autosaves.
-**Save…** opens the ordinary save dialog (Chrome and Edge): pick a name and folder, or pick the
-file you want to replace and confirm. Until you save, the button reads "Unsaved changes". **Download
-copy** is the same thing as a plain download.
-
-If the File System Access API isn't available (Firefox/Safari) it falls back to
-downloading a self-contained `deck-edited.html` (see below).
+Edits live in the browser tab until you press **Download copy** (`D` or ⌘S): one self-contained
+file named after the deck, in every browser. A dot on the button marks unsaved changes and its
+tooltip says so; downloading clears it. Nothing autosaves, and closing the tab with unsaved
+changes asks first.
 
 ## One file to share
 
@@ -79,8 +72,7 @@ image baked in. You get it two ways:
 
 - **At generation** — the skill runs `standalone.py` and writes it next to `deck.html`, so in
   Cowork the shareable file exists the moment the deck does.
-- **After editing** — in Chrome or Edge, **Save…** writes over the file you opened; elsewhere (or for
-  a separate copy) press **Download copy** in the toolbar.
+- **After editing** — press **Download copy** in the toolbar.
 
 The file is built content-first: your slide markup sits at the top, hand-editable in any text
 editor; the minified stylesheet and runtime are appended at the end of `<body>` (a one-line
