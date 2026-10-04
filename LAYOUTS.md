@@ -458,6 +458,24 @@ attributes, apply the requested change, and remove the attribute.
 
 ---
 
+## Text boxes and rotated stickers — added by the user, never by you
+
+A free-floating text box is a sticker whose body is a paragraph. The user adds one in edit mode
+(**Text box** in the toolbar); you will meet them when revising a deck, and you leave them where
+they are, like pasted images.
+
+```html
+<div class="sticker sticker--text" style="left:12%;top:38%;width:40%;rotate:-6deg"
+     data-align="center"><p class="h2">Words</p></div>
+```
+
+The paragraph wears one of the deck's own type classes — `display`, `h1`, `h2`, `h3`, `lead`,
+`body`, `caption`, `eyebrow` — so a box follows the theme and has no font, size or colour of its
+own. `style` carries position and width, plus `rotate` once the user has turned it (stickers
+of either kind can be rotated). `data-align` is `center` or `right`; absent means left. Don't
+write these when generating a deck; use a layout. To change a box's words in a revision, edit
+the `<p>`.
+
 ## Custom content — `data-style` and `data-custom`
 
 Only on the user's explicit request; `SKILL.md` §7 carries the full contract and the reasons.

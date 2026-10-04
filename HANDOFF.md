@@ -23,6 +23,10 @@ to a notes list: `callout` split view with `is-flipped`, and `callout-full` full
 floating `callout__box`; pins carry the only sanctioned inline style, `left`/`top`). In edit
 mode arrow keys jump whole slides (reveal steps only play in view mode). Sticker resize is corner-handle
 drag with anchored opposite corners; wheel-resize was removed as awkward.
+Text boxes (`.sticker.sticker--text`, 2026-10-04) reuse the sticker machinery: the body is a `<p>`, a grip above the
+box moves it (a click in the text is a caret), and a floating bar picks one of the deck's type classes (on the `<p>`) and `data-align`. Every sticker rotates
+via a knob below it (`rotate:` in its inline style; resize keeps the opposite corner fixed under rotation). Overview has a select mode that downloads a copy without, or
+with only, the picked slides (`serialize({ drop })`).
 Single-file export: the standalone file (named after the deck's `<title>`) is the sole user-facing
 deliverable on every surface; `standalone.py --explode` reverses it for base64-free revisions. Two producers, kept in sync by hand: `standalone.py` (run by the skill at generation,
 SKILL.md §3) and the runtime's "Download copy" toolbar button / `inlineAssets()` (post-edit).

@@ -1504,6 +1504,50 @@ body.is-editing .sticker.is-sel .handle { display: block; }
 .handle[data-c="sw"] { left: -6px; bottom: -6px; cursor: nesw-resize; }
 .handle[data-c="se"] { right: -6px; bottom: -6px; cursor: nwse-resize; }
 
+/* text box: a sticker whose body is a <p> wearing one of the deck's own type
+   classes (display, h1…eyebrow). It carries no font, size or colour of its own. */
+.sticker--text {
+  box-shadow: none; border-radius: 4px; padding: 2px 6px;
+  user-select: text;
+}
+.sticker--text > p { outline: none; overflow-wrap: anywhere; min-height: 1.3em; max-width: none; }
+.sticker--text[data-align="center"] { text-align: center; }
+.sticker--text[data-align="right"]  { text-align: right; }
+body.is-editing .sticker--text { cursor: text; }
+body.is-editing .sticker--text > p:empty::before { content: "Type something"; opacity: .4; }
+.handle--grip { top: -30px; left: 50%; margin-left: -24px; width: 48px; height: 18px; border-radius: 9px; cursor: grab; }
+.handle--grip:active { cursor: grabbing; }
+.handle--rot {
+  left: 50%; bottom: -34px; margin-left: -8px; width: 16px; height: 16px; border-radius: 50%;
+  background: var(--accent); border-color: #fff; cursor: grab;
+}
+.handle--rot::before {              /* stem back to the box */
+  content: ""; position: absolute; left: 50%; bottom: 100%; width: 1.5px; height: 18px;
+  margin-left: -.75px; background: var(--accent);
+}
+.handle--rot:active { cursor: grabbing; }
+.tbx-bar select {
+  height: 30px; padding: 0 8px; border: 0; border-radius: 7px; cursor: pointer;
+  background: rgba(255,255,255,.08); color: rgba(246,245,243,.92); font: 600 12px/1 var(--font-body);
+}
+.tbx-bar {
+  position: fixed; z-index: 60; display: none; align-items: center; gap: 2px; padding: 4px;
+  background: #17171d; border: 1px solid rgba(255,255,255,.16); border-radius: 10px;
+  box-shadow: 0 14px 34px -12px rgba(0,0,0,.7);
+}
+.tbx-bar.is-shown { display: flex; }
+.tbx-bar button {
+  min-width: 30px; height: 30px; padding: 0 6px; border: 0; border-radius: 7px; cursor: pointer;
+  display: inline-grid; place-items: center;
+  background: none; color: rgba(246,245,243,.84); font: 600 12px/1 var(--font-body);
+}
+.tbx-bar button:hover { background: rgba(255,255,255,.1); color: #fff; }
+.tbx-bar button.is-on { background: rgba(255,255,255,.16); color: #fff; }
+.tbx-bar svg { width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+.tbx-bar i { width: 1px; height: 18px; margin: 0 4px; background: rgba(255,255,255,.16); }
+body.is-presenter .tbx-bar, body.is-overview .tbx-bar { display: none !important; }
+@media print { .tbx-bar { display: none !important; } }
+
 /* --- badges: request-change chip + overflow warning, edit-mode only --- */
 .badge {
   position: absolute; top: 28px; right: 28px; z-index: 5;

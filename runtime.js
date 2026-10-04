@@ -255,10 +255,11 @@
   }
 
   function ensureStickerHandles(el) {
-    if ($$(".handle", el).length) return;
-    ["nw", "ne", "sw", "se"].forEach(c => {
+    const want = [...["nw", "ne", "sw", "se"], "rot", ...(el.classList.contains("sticker--text") ? ["move"] : [])];
+    want.forEach(c => {
+      if ($(`.handle[data-c="${c}"]`, el)) return;
       const i = document.createElement("i");
-      i.className = "handle";
+      i.className = "handle" + (c === "move" ? " handle--grip" : c === "rot" ? " handle--rot" : "");
       i.dataset.gen = "";
       i.dataset.c = c;
       el.append(i);
@@ -669,9 +670,85 @@
   }
 
   function selectSticker(el) {
+    const prev = selectedSticker;
     $$(".sticker.is-sel", deck).forEach(s => s.classList.remove("is-sel"));
     selectedSticker = el;
     el?.classList.add("is-sel");
+    // a text box left empty was never meant to stay
+    if (prev && prev !== el && prev.classList.contains("sticker--text") && !prev.textContent.trim()) prev.remove();
+    syncTbxBar();
+  }
+
+  /* ------------------------------------------------------------ text boxes */
+  // A text box is a sticker whose body is a <p> wearing one of the deck's own
+  // type classes — the same primitives the layouts use — so it re-skins with
+  // the theme and can never be off-brand. Position and width ride in the
+  // inline style like any sticker; alignment is data-align.
+  const TBX_STYLES = [
+    ["display", "Display"], ["h1", "Heading 1"], ["h2", "Heading 2"], ["h3", "Heading 3"],
+    ["lead", "Lead"], ["body", "Body"], ["caption", "Caption"], ["eyebrow", "Eyebrow"],
+  ];
+  const tbxStyle = b => TBX_STYLES.find(([c]) => b.querySelector(":scope > p")?.classList.contains(c))?.[0] || "body";
+
+  function addTextBox() {
+    if (!editing) return;
+    snapshot();
+    const box = document.createElement("div");
+    box.className = "sticker sticker--text";
+    box.style.cssText = "left:12%;top:38%;width:40%";
+    const p = document.createElement("p");
+    p.className = "body";
+    p.setAttribute("contenteditable", "plaintext-only");
+    p.setAttribute("spellcheck", "false");
+    box.append(p);
+    ensureStickerHandles(box);
+    slides[index].append(box);
+    selectPin(null);
+    selectSticker(box);
+    placeCaret(p, true);
+    placeTbxBar();
+    toast("Type, then pick a text style in the bar above the box · drag the grip to move");
+  }
+
+  function syncTbxBar() {
+    const bar = $("#tbx-bar");
+    if (!bar) return;
+    const b = selectedSticker?.classList.contains("sticker--text") && editing ? selectedSticker : null;
+    bar.classList.toggle("is-shown", !!b);
+    if (!b) return;
+    $("select", bar).value = tbxStyle(b);
+    $$("[data-a^='align']", bar).forEach(el =>
+      el.classList.toggle("is-on", (b.dataset.align || "left") === el.dataset.a.split(":")[1]));
+    placeTbxBar();
+  }
+  function placeTbxBar() {
+    const bar = $("#tbx-bar"), b = selectedSticker;
+    if (!bar || !bar.classList.contains("is-shown") || !b) return;
+    if (b.closest(".slide") !== slides[index]) { bar.classList.remove("is-shown"); return; }
+    const r = b.getBoundingClientRect(), bh = bar.offsetHeight, bw = bar.offsetWidth;
+    let top = r.top - bh - 40;   // clear of the grip above the box
+    if (top < 8) top = Math.min(r.bottom + 12, innerHeight - bh - 8);
+    bar.style.top = top + "px";
+    bar.style.left = Math.max(8, Math.min(innerWidth - bw - 8, r.left)) + "px";
+  }
+  function onTbxStyle(e) {
+    const b = selectedSticker, p = b?.querySelector(":scope > p");
+    if (!p) return;
+    snapshot();
+    TBX_STYLES.forEach(([c]) => p.classList.remove(c));
+    p.classList.add(e.target.value);
+    placeCaret(p, true);
+    placeTbxBar();
+  }
+  function onTbxBar(e) {
+    const el = e.target.closest("[data-a]"), b = selectedSticker;
+    if (!el || !b?.classList.contains("sticker--text")) return;
+    const [a, v] = el.dataset.a.split(":");
+    snapshot();
+    const set = (k, val, dflt) => val === dflt ? delete b.dataset[k] : b.dataset[k] = val;
+    if (a === "align") set("align", v, "left");
+    else if (a === "delete") { b.remove(); selectSticker(null); return; }
+    syncTbxBar();
   }
 
   // arrow-key nudge for the selected sticker or pin. One undo entry per
@@ -766,6 +843,9 @@
       const handle = e.target.closest(".handle");
       const el = e.target.closest(".sticker");
       if (!el) { selectSticker(null); selectPin(null); return; }
+      const isText = el.classList.contains("sticker--text");
+      // a click in a text box's text is a caret, not a drag — the grip moves it
+      if (isText && !handle) { selectPin(null); selectSticker(el); return; }
       e.preventDefault();
       selectPin(null);
       selectSticker(el);
@@ -774,28 +854,62 @@
       const s = box.width / W;                      // account for canvas scale
       const preDrag = deck.innerHTML;
 
-      if (handle) {
-        e.stopPropagation();
-        const corner = handle.dataset.c;
-        const startW = parseFloat(el.style.width) || 30;
-        const startL = parseFloat(el.style.left) || 0;
-        const startT = parseFloat(el.style.top) || 0;
-        const aspect = el.offsetHeight / el.offsetWidth || 1;   // height is auto — track it to anchor the opposite corner
-        const startX = e.clientX;
-        const move = ev => {
-          const dx = (ev.clientX - startX) / s / W * 100;
-          let w = corner === "se" || corner === "ne" ? startW + dx : startW - dx;
-          w = Math.max(4, Math.min(100, w));
-          el.style.width = w.toFixed(1) + "%";
-          if (corner === "nw" || corner === "sw") el.style.left = (startL + (startW - w)).toFixed(2) + "%";
-          if (corner === "nw" || corner === "ne") el.style.top = (startT - (w - startW) * aspect * W / H).toFixed(2) + "%";
-        };
+      const theta = () => (parseFloat(el.style.rotate) || 0) * Math.PI / 180;
+      const finish = (move) => {
         const up = () => {
           removeEventListener("pointermove", move); removeEventListener("pointerup", up);
           pushSnapshotRaw(preDrag);
         };
         addEventListener("pointermove", move);
         addEventListener("pointerup", up);
+      };
+
+      // rotate: the knob below the box turns it about its centre
+      if (handle?.dataset.c === "rot") {
+        e.stopPropagation();
+        const r0 = el.getBoundingClientRect();           // a rotated box's bounding box keeps its centre
+        const cx = r0.left + r0.width / 2, cy = r0.top + r0.height / 2;
+        const a0 = Math.atan2(e.clientY - cy, e.clientX - cx);
+        const t0 = theta() * 180 / Math.PI;
+        finish(ev => {
+          let deg = t0 + (Math.atan2(ev.clientY - cy, ev.clientX - cx) - a0) * 180 / Math.PI;
+          deg = ((deg + 180) % 360 + 360) % 360 - 180;
+          const snap = ev.shiftKey ? 15 : 45;            // ⇧ for 15° steps; otherwise only a gentle pull to 45°
+          const near = Math.round(deg / snap) * snap;
+          if (ev.shiftKey || Math.abs(deg - near) < 3) deg = near;
+          deg = Math.round(deg * 10) / 10;
+          if (deg) el.style.rotate = deg + "deg"; else el.style.removeProperty("rotate");
+          placeTbxBar();
+        });
+        return;
+      }
+
+      // resize: keeps the corner (or, for text, the top edge) opposite the handle
+      // fixed on the slide, whatever the rotation — all in canvas pixels
+      if (handle && handle.dataset.c !== "move") {
+        e.stopPropagation();
+        const corner = handle.dataset.c, th = theta(), cos = Math.cos(th), sin = Math.sin(th);
+        const wp = el.offsetWidth, hp = el.offsetHeight;
+        const rot = (x, y) => [x * cos - y * sin, x * sin + y * cos];
+        const cx = (parseFloat(el.style.left) || 0) / 100 * W + wp / 2;
+        const cy = (parseFloat(el.style.top) || 0) / 100 * H + hp / 2;
+        const east = corner.includes("e");
+        const sx = east ? -1 : 1;                                   // the anchored side is the opposite one
+        const sy = isText ? -1 : (corner.includes("n") ? 1 : -1);
+        const [ax, ay] = rot(sx * wp / 2, sy * hp / 2);
+        const px = cx + ax, py = cy + ay;                           // anchor point, slide coords
+        const startX = e.clientX, startY = e.clientY;
+        finish(ev => {
+          const dx = (ev.clientX - startX) / s, dy = (ev.clientY - startY) / s;
+          const along = dx * cos + dy * sin;                        // pointer travel along the box's own x axis
+          const w = Math.max(isText ? 0.08 * W : 0.04 * W, Math.min(W, wp + (east ? along : -along)));
+          el.style.width = (w / W * 100).toFixed(2) + "%";
+          const h = isText ? el.offsetHeight : hp * w / wp;         // text reflows; an image keeps its aspect
+          const [bx, by] = rot(sx * w / 2, sy * h / 2);
+          el.style.left = ((px - bx - w / 2) / W * 100).toFixed(2) + "%";
+          el.style.top = ((py - by - h / 2) / H * 100).toFixed(2) + "%";
+          placeTbxBar();
+        });
         return;
       }
 
@@ -803,6 +917,7 @@
       const move = ev => {
         el.style.left = (start.l + ((ev.clientX - start.x) / s / W) * 100).toFixed(2) + "%";
         el.style.top = (start.t + ((ev.clientY - start.y) / s / H) * 100).toFixed(2) + "%";
+        placeTbxBar();
       };
       const up = () => {
         removeEventListener("pointermove", move); removeEventListener("pointerup", up);
@@ -1358,6 +1473,7 @@
   function restore(snap) {
     const { html, index: at } = typeof snap === "string" ? { html: snap, index } : snap;
     closePopover();   // an open popover holds references into the DOM being replaced
+    selectedSticker = null; syncTbxBar();
     deck.innerHTML = html;
     decorate();
     slides = $$(".slide", deck);
@@ -1815,7 +1931,7 @@
         return;
       }
 
-      if (e.key === "Backspace" && !el.textContent.trim()) {
+      if (e.key === "Backspace" && !el.textContent.trim() && !el.closest(".sticker--text")) {
         if (listEl) {
           if (listEl.children.length <= 1) return;         // never remove the last li
           e.preventDefault();
@@ -1853,7 +1969,7 @@
   }
 
   /* ---------------------------------------------------------------- chrome */
-  const ICONS = `<svg width="0" height="0" style="position:absolute" aria-hidden="true" data-runtime><symbol id="i-prev" viewBox="0 0 24 24"><path d="M15 6l-6 6 6 6"/></symbol><symbol id="i-next" viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></symbol><symbol id="i-grid" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></symbol><symbol id="i-theme" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 3a9 9 0 0 1 0 18z" fill="currentColor" stroke="none"/></symbol><symbol id="i-present" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/></symbol><symbol id="i-pdf" viewBox="0 0 24 24"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/><path d="M12 11v6M9.5 14.5L12 17l2.5-2.5"/></symbol><symbol id="i-edit" viewBox="0 0 24 24"><path d="M4 20h4l10.5-10.5a2.1 2.1 0 0 0-3-3L5 17z"/><path d="M13 7l3 3"/></symbol><symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol><symbol id="i-dup" viewBox="0 0 24 24"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/></symbol><symbol id="i-trash" viewBox="0 0 24 24"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/></symbol><symbol id="i-spark" viewBox="0 0 24 24"><path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z"/><path d="M19 16l.7 2 2 .7-2 .7-.7 2-.7-2-2-.7 2-.7z"/></symbol><symbol id="i-undo" viewBox="0 0 24 24"><path d="M9 14L4 9l5-5"/><path d="M4 9h10a6 6 0 0 1 0 12h-3"/></symbol><symbol id="i-save" viewBox="0 0 24 24"><path d="M5 3h11l3 3v15H5z"/><path d="M8 3v6h8V3M8 21v-7h8v7"/></symbol><symbol id="i-check" viewBox="0 0 24 24"><path d="M5 12l5 5L20 7"/></symbol><symbol id="i-help" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M9.5 9.5a2.5 2.5 0 1 1 3.5 2.3c-.7.4-1 1-1 1.7M12 17h.01"/></symbol><symbol id="i-notes" viewBox="0 0 24 24"><path d="M5 4h14v16H5z"/><path d="M8 9h8M8 13h8M8 17h5"/></symbol><symbol id="i-image" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="8.5" cy="10" r="1.5"/><path d="M21 16l-5-5-8 8"/></symbol><symbol id="i-warn" viewBox="0 0 24 24"><path d="M12 4l9 16H3z"/><path d="M12 10v4M12 17h.01"/></symbol><symbol id="i-close" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></symbol><symbol id="i-sliders" viewBox="0 0 24 24"><path d="M4 8h9M17 8h3M4 16h3M11 16h9"/><circle cx="15" cy="8" r="2"/><circle cx="9" cy="16" r="2"/></symbol><symbol id="i-first" viewBox="0 0 24 24"><path d="M17 6l-6 6 6 6"/><path d="M11 6l-6 6 6 6"/></symbol></svg>`;
+  const ICONS = `<svg width="0" height="0" style="position:absolute" aria-hidden="true" data-runtime><symbol id="i-prev" viewBox="0 0 24 24"><path d="M15 6l-6 6 6 6"/></symbol><symbol id="i-next" viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></symbol><symbol id="i-grid" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></symbol><symbol id="i-theme" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 3a9 9 0 0 1 0 18z" fill="currentColor" stroke="none"/></symbol><symbol id="i-present" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/></symbol><symbol id="i-pdf" viewBox="0 0 24 24"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/><path d="M12 11v6M9.5 14.5L12 17l2.5-2.5"/></symbol><symbol id="i-edit" viewBox="0 0 24 24"><path d="M4 20h4l10.5-10.5a2.1 2.1 0 0 0-3-3L5 17z"/><path d="M13 7l3 3"/></symbol><symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol><symbol id="i-dup" viewBox="0 0 24 24"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/></symbol><symbol id="i-trash" viewBox="0 0 24 24"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/></symbol><symbol id="i-spark" viewBox="0 0 24 24"><path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z"/><path d="M19 16l.7 2 2 .7-2 .7-.7 2-.7-2-2-.7 2-.7z"/></symbol><symbol id="i-undo" viewBox="0 0 24 24"><path d="M9 14L4 9l5-5"/><path d="M4 9h10a6 6 0 0 1 0 12h-3"/></symbol><symbol id="i-save" viewBox="0 0 24 24"><path d="M5 3h11l3 3v15H5z"/><path d="M8 3v6h8V3M8 21v-7h8v7"/></symbol><symbol id="i-check" viewBox="0 0 24 24"><path d="M5 12l5 5L20 7"/></symbol><symbol id="i-help" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M9.5 9.5a2.5 2.5 0 1 1 3.5 2.3c-.7.4-1 1-1 1.7M12 17h.01"/></symbol><symbol id="i-notes" viewBox="0 0 24 24"><path d="M5 4h14v16H5z"/><path d="M8 9h8M8 13h8M8 17h5"/></symbol><symbol id="i-image" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="8.5" cy="10" r="1.5"/><path d="M21 16l-5-5-8 8"/></symbol><symbol id="i-warn" viewBox="0 0 24 24"><path d="M12 4l9 16H3z"/><path d="M12 10v4M12 17h.01"/></symbol><symbol id="i-close" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></symbol><symbol id="i-sliders" viewBox="0 0 24 24"><path d="M4 8h9M17 8h3M4 16h3M11 16h9"/><circle cx="15" cy="8" r="2"/><circle cx="9" cy="16" r="2"/></symbol><symbol id="i-text" viewBox="0 0 24 24"><path d="M5 7V5h14v2M12 5v14M9 19h6"/></symbol><symbol id="i-first" viewBox="0 0 24 24"><path d="M17 6l-6 6 6 6"/><path d="M11 6l-6 6 6 6"/></symbol></svg>`;
 
   const SHORTCUTS = [
     ["→ / space", "Next"], ["←", "Previous"], ["R / Home", "Restart from slide 1"], ["End", "Last slide"],
@@ -1862,7 +1978,7 @@
     ["↑↓←→", "Overview: select slide"], ["Enter", "Overview: open selected slide"],
     ["1…9", "Overview: type a slide number"], [`${KEY.alt}arrows`, "Overview: reorder slide (edit mode)"],
     [`${KEY.cmd}Z`, "Undo"], [`${KEY.cmd}${KEY.shift}Z`, "Redo"], [`${KEY.cmd}D`, "Duplicate slide"], [KEY.del, "Delete selected sticker"],
-    ["[ / ]", "Layer selected sticker"], ["Arrows", `Nudge selected sticker / pin (${KEY.shift} = bigger)`],
+    ["[ / ]", "Layer selected sticker or text box"], ["Rotate knob", "Turn a sticker or text box (⇧ = 15° steps)"], ["Arrows", `Nudge selected sticker / pin (${KEY.shift} = bigger)`],
     ["Tab", "Next text box on the slide"], ["↑ / ↓", "At text edge: jump to text above / below"],
     [`${KEY.cmd}B`, "Emphasise selection (edit mode)"],
     [`${KEY.alt}↑ / ${KEY.alt}↓`, "Move list item up / down"],
@@ -1875,6 +1991,15 @@
     document.body.insertAdjacentHTML("beforeend", ICONS + `
       <div class="toolbar" id="toolbar" data-runtime></div>
       <div class="tip" id="tip" data-runtime style="display:none"></div>
+      <div class="tbx-bar" id="tbx-bar" data-runtime>
+        <select data-tip="Text style" aria-label="Text style">${TBX_STYLES.map(([c, l]) => `<option value="${c}">${l}</option>`).join("")}</select>
+        <i></i>
+        <button data-a="align:left" data-tip="Align left" aria-label="Align left"><svg viewBox="0 0 16 16"><path d="M2 3h12M2 7h8M2 11h12M2 15h8"/></svg></button>
+        <button data-a="align:center" data-tip="Center" aria-label="Center"><svg viewBox="0 0 16 16"><path d="M2 3h12M4 7h8M2 11h12M4 15h8"/></svg></button>
+        <button data-a="align:right" data-tip="Align right" aria-label="Align right"><svg viewBox="0 0 16 16"><path d="M2 3h12M6 7h8M2 11h12M6 15h8"/></svg></button>
+        <i></i>
+        <button data-a="delete" data-tip="Delete text box" aria-label="Delete text box"><svg viewBox="0 0 24 24"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/></svg></button>
+      </div>
       <div class="toast" id="toast" data-runtime></div>
       <div class="overview" data-runtime>
         <div class="overview__head">
@@ -1955,6 +2080,7 @@
       ${btn({ id: "btn-next", icon: "next", cls: "icon-only", key: "→", tip: "Next slide" })}
       <span class="tb-sep"></span>
       ${btn({ id: "btn-add", icon: "plus", label: "Add slide", tip: "Insert a new slide after this one" })}
+      ${btn({ id: "btn-text", icon: "text", label: "Text box", tip: "Add a free-floating text box to this slide" })}
       ${btn({ id: "btn-dup", icon: "dup", cls: "icon-only", key: KEY.cmd + "D", tip: "Duplicate slide" })}
       ${btn({ id: "btn-del", icon: "trash", cls: "icon-only", key: KEY.del, tip: "Delete slide" })}
       <span class="tb-sep"></span>
@@ -1982,6 +2108,7 @@
       $("#btn-help").onclick = () => toggleShortcuts();
     } else {
       $("#btn-add").onclick = e => openPicker(e.currentTarget);
+      $("#btn-text").onclick = addTextBox;
       $("#btn-dup").onclick = duplicateSlide;
       $("#btn-del").onclick = deleteSlide;
       $("#btn-opts").onclick = e => openPopover("options", e.currentTarget);
@@ -2730,6 +2857,11 @@
   } else {
     if (params.has("notes")) document.body.classList.add("show-notes");
     mountChrome();
+    const tbx = $("#tbx-bar");
+    tbx.addEventListener("mousedown", e => { if (e.target.tagName !== "SELECT") e.preventDefault(); });   // keep the caret in the box
+    $("select", tbx).addEventListener("change", onTbxStyle);
+    tbx.addEventListener("click", onTbxBar);
+    addEventListener("resize", placeTbxBar);
     $("#ov-select").onclick = () => setPicking(!ovPicking);
     $("#ov-all").onclick = () => {
       const all = ovPicked.size === slides.length;

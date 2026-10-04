@@ -293,7 +293,7 @@ markup into `deck.html`, then revise as usual.
 6. Leave everything else exactly as written. The user's wording is theirs, including phrasing you
    would not have chosen. Only touch slides you were asked about.
 7. Never touch `src` attributes on `<img>`, and never remove `.sticker` elements — those are the
-   user's pasted images.
+   user's pasted images and text boxes (`sticker--text`, LAYOUTS.md).
 8. Re-check the density budget on any slide you rewrote.
 9. Rebuild the share file (`standalone.py`, §3) — a stale share file is worse than none.
    Delete any old export left under a previous title.
