@@ -1,0 +1,38 @@
+/* theme: slaydy — flat editorial paper, one indigo accent, vermilion for emphasis */
+:root {
+  --app-bg: #e9e6df;
+  --bg: #fbfaf7;
+  --fg: #131318;
+  --muted: rgba(19, 19, 24, .6);
+  --faint: rgba(19, 19, 24, .14);
+  --surface: #f2efe8;
+
+  --accent: #3a2fd6;
+  --accent-2: #d93a1f;
+  --accent-fg: #fbfaf7;
+
+  --wash-opacity: 0;   /* flat paper, no gradient */
+
+  --font-display: "Bricolage Grotesque", "Inter Tight", system-ui, sans-serif;
+  --font-body: "IBM Plex Sans", Inter, system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", "JetBrains Mono", ui-monospace, monospace;
+  --font-serif: "Instrument Serif", Georgia, serif;
+}
+
+/* Brand layer: titles are heavier and tighter than stock. */
+.display, .h1, .h2, .h3 { font-weight: 800; letter-spacing: -.035em; }
+
+/* The signature: emphasis in a title switches face to a vermilion serif italic. */
+.display strong, .h1 strong, .h2 strong, .h3 strong,
+h1 strong, h2 strong, h3 strong {
+  font-family: var(--font-serif);
+  font-style: italic;
+  font-weight: 400;
+  letter-spacing: -.01em;
+  font-size: 1.08em;
+  color: var(--accent-2);
+}
+
+/* Vermilion on indigo is unreadable: on accent fills keep the serif, inherit the ink. */
+.slide--section strong,
+.slide--bento .cell--accent strong { color: inherit; }

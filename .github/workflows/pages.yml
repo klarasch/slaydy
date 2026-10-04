@@ -1,0 +1,38 @@
+# Publishes the landing page (site/) to GitHub Pages on every push to master that touches it
+# or anything it shows: the runtime, the stock midnight theme, the changelog.
+#
+# One-time setup: Settings > Pages > Source: GitHub Actions.
+# A fork inherits this file but not the job: it only runs in upstream.
+name: Pages
+
+on:
+  push:
+    branches: [master]
+    paths: ["site/**", "runtime.css", "runtime.js", "themes/midnight.css", "CHANGELOG.md", ".github/workflows/pages.yml"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    if: github.repository == 'klarasch/slaydy'
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Assemble the site
+        run: site/build-pages.sh _site
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+      - id: deploy
+        uses: actions/deploy-pages@v4

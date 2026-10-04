@@ -1,0 +1,628 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>slaydy — your brand's deck skill for Claude</title>
+<meta name="description" content="slaydy is a Claude skill that writes decks as one HTML file your team can keep editing, by hand and with Claude. Fork it, hand Claude your brand, and keep taking runtime updates.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,600;12..96,800&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&family=Instrument+Serif:ital@1&family=Unbounded:wght@800&family=Space+Mono:wght@700&family=Fraunces:ital,opsz,wght@1,9..144,900&family=Syne:wght@800&display=swap">
+<style>
+:root{
+  --desk:#e9e6df; --page:#f2f0ea; --paper:#fbfaf7; --ink:#131318; --accent:#3a2fd6; --mark:#d93a1f;
+  --muted:color-mix(in srgb,var(--ink) 62%,var(--paper));
+  --line:color-mix(in srgb,var(--ink) 14%,transparent);
+  --soft:color-mix(in srgb,var(--ink) 5%,var(--paper));
+  --f-display:"Bricolage Grotesque",ui-sans-serif,system-ui,sans-serif;
+  --f-body:"IBM Plex Sans",ui-sans-serif,system-ui,sans-serif;
+  --f-mono:"IBM Plex Mono",ui-monospace,Menlo,monospace;
+  color-scheme:light;
+}
+*{box-sizing:border-box}
+body{margin:0}
+img{max-width:100%}
+html{scroll-behavior:smooth}
+body{background:var(--page);color:var(--ink);font:16px/1.6 var(--f-body);-webkit-font-smoothing:antialiased}
+a{color:inherit}
+:focus-visible{outline:2px solid var(--accent);outline-offset:3px;border-radius:3px}
+.w{max-width:1200px;margin:0 auto;padding:0 28px}
+code,kbd,pre,.mono{font-family:var(--f-mono)}
+h1,h2,h3{font-family:var(--f-display);margin:0;text-wrap:balance;letter-spacing:-.025em}
+p{margin:0}
+.eyebrow{font:500 12px/1 var(--f-mono);letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+
+/* nav */
+nav{display:flex;align-items:center;gap:28px;padding:22px 0}
+.logo{font:800 22px/1 var(--f-display);letter-spacing:-.04em;text-decoration:none}
+
+nav .links{display:flex;align-items:center;gap:22px;margin-left:auto;font-size:14px}
+nav .links a{text-decoration:none;color:var(--muted)}
+nav .links a:hover{color:var(--ink)}
+.btn{display:inline-flex;align-items:center;gap:8px;font:600 15px/1 var(--f-body);text-decoration:none;padding:13px 20px;border-radius:99px;border:1px solid var(--ink);white-space:nowrap}
+.btn--solid{background:var(--ink);color:var(--paper)}
+.btn--solid:hover{background:var(--accent);border-color:var(--accent)}
+.btn--sm{padding:9px 14px;font-size:13.5px}
+@media (max-width:720px){nav .links a:not(.btn){display:none}}
+
+/* hero: the deck is the hero, the pitch sits under it */
+.hero{padding:2px 0 64px}
+.desk{width:min(100%,max(560px,calc((100svh - 300px) * 16 / 9)));margin:0 auto;min-width:0;display:grid;gap:14px}
+/* the deck snaps its scale to 16px steps: a frame on the same grid is filled exactly */
+@supports (width:round(down,100px,16px)){.desk{width:round(down,min(100%,max(560px,calc((100svh - 300px) * 16 / 9))),16px)}}
+@media (max-width:620px){.desk{width:100%}}
+@supports (width:round(down,100px,16px)){@media (max-width:620px){.desk{width:round(down,100%,16px)}}}
+.pitch{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:16px 40px;align-items:center;margin-top:14px;padding-top:20px;border-top:1px solid var(--line)}
+.pitch h1{font-size:clamp(20px,1.9vw,25px);line-height:1.15;font-weight:800;letter-spacing:-.03em;margin-bottom:6px;text-wrap:pretty}
+.pitch h1 em{font-style:normal;color:var(--accent)}
+.pitch .lede{font-size:15px;line-height:1.5;color:var(--muted);max-width:68ch}
+.pitch .cta{display:flex;flex-wrap:wrap;gap:12px;align-items:center}
+.pitch .cta a.link{font-weight:500;font-size:15px;text-decoration:none;color:var(--muted)}
+.pitch .cta a.link:hover{color:var(--ink)}
+@media (max-width:860px){.pitch{grid-template-columns:1fr}}
+.desk .frame{aspect-ratio:16/9;border-radius:10px;overflow:hidden;background:var(--paper);box-shadow:0 0 0 1px var(--line),0 2px 4px color-mix(in srgb,var(--ink) 5%,transparent),0 18px 40px -8px color-mix(in srgb,var(--ink) 16%,transparent),0 60px 100px -30px color-mix(in srgb,var(--ink) 30%,transparent);transition:box-shadow .15s ease}
+.desk .frame.focus{box-shadow:0 0 0 2px var(--accent),0 2px 4px color-mix(in srgb,var(--ink) 5%,transparent),0 18px 40px -8px color-mix(in srgb,var(--ink) 16%,transparent),0 60px 100px -30px color-mix(in srgb,var(--ink) 30%,transparent)}
+.desk iframe{display:block;width:100%;height:100%;border:0}
+.strip{display:flex;flex-wrap:wrap;gap:10px 22px;align-items:center;justify-content:space-between;font-size:13px;line-height:1.2;color:var(--muted)}
+.strip .grp{display:flex;flex-wrap:wrap;gap:8px 14px;align-items:center}
+.strip .sw2{display:inline-flex;gap:2px;padding:2px;border:1px solid var(--line);border-radius:99px}
+.strip .sw2 button{display:inline-flex;align-items:center;gap:7px;font:500 13px/1 var(--f-body);color:var(--muted);background:none;border:0;border-radius:99px;padding:7px 12px;cursor:pointer}
+.strip .sw2 button:hover{color:var(--ink)}
+.strip .sw2 button[aria-checked=true]{background:var(--ink);color:var(--paper)}
+.strip .chip{display:inline-block;width:14px;height:14px;border-radius:50%;box-shadow:0 0 0 1px color-mix(in srgb,currentColor 35%,transparent);flex:none}
+.strip .keys button{display:inline-flex;gap:6px;align-items:center;font:400 13px/1 var(--f-body);color:var(--muted);background:none;border:0;padding:0;cursor:pointer}
+.strip .keys button:hover{color:var(--ink)}
+.strip a{text-decoration:none;color:var(--muted)}
+.strip a:hover{color:var(--ink)}
+kbd{display:inline-grid;place-items:center;min-width:24px;height:24px;padding:0 6px;border-radius:5px;background:var(--paper);color:var(--ink);border:1px solid var(--line);border-bottom-width:2px;font:500 12px var(--f-mono)}
+
+/* sections */
+section{padding:112px 0 0}
+.sh{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:24px 48px;align-items:end;margin-bottom:44px}
+.sh h2{font-size:clamp(32px,4.2vw,54px);line-height:1;font-weight:800}
+.sh p{color:var(--muted);max-width:52ch;font-size:17px}
+.sh .eyebrow{grid-column:1/-1}
+@media (max-width:860px){.sh{grid-template-columns:1fr}}
+
+/* modes */
+.modes{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));border-top:1px solid var(--ink)}
+.mode{padding:24px 28px 8px 0;display:grid;gap:10px;align-content:start}
+.mode + .mode{padding-left:28px;border-left:1px solid var(--line)}
+.mode h3{font-size:24px;font-weight:700}
+.mode .say{font:400 14px/1.5 var(--f-mono);color:var(--accent)}
+.mode p{color:var(--muted);font-size:15px}
+.fl{list-style:none;margin:6px 0 0;padding:0;display:grid}
+.fl li{padding:9px 0;border-top:1px solid var(--line);font-size:15px;display:flex;gap:10px;align-items:center}
+.mode p code{font-size:14px}
+.feats{margin-top:48px;display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:28px 36px}
+.feat{display:grid;grid-template-columns:auto 1fr;gap:4px 14px;align-items:baseline}
+.feat kbd{grid-row:span 2;background:var(--soft)}
+.feat h4{margin:0;font:600 15.5px/1.3 var(--f-body)}
+.feat p{grid-column:2;color:var(--muted);font-size:14.5px;line-height:1.5}
+@media (max-width:760px){.modes{grid-template-columns:1fr}.mode + .mode{padding-left:0;border-left:0;border-top:1px solid var(--line)}}
+
+/* fork */
+.fork{background:var(--ink);color:var(--paper);margin-top:112px;padding:104px 0 112px}
+.fork section{padding-top:0}
+.fork .sh p,.fork .eyebrow{color:color-mix(in srgb,var(--paper) 62%,var(--ink))}
+.fork .sh h2 em{font-style:normal;color:color-mix(in srgb,var(--accent) 55%,var(--paper))}
+.how{display:grid;grid-template-columns:minmax(0,.9fr) minmax(0,1.1fr);gap:48px;align-items:start}
+.steps{list-style:none;margin:0;padding:0;display:grid;counter-reset:s}
+.steps li{counter-increment:s;display:grid;grid-template-columns:32px 1fr;gap:6px 12px;padding:22px 0;border-top:1px solid color-mix(in srgb,var(--paper) 22%,transparent)}
+.steps li:first-child{border-top-color:color-mix(in srgb,var(--paper) 45%,transparent)}
+.steps li::before{content:counter(s);grid-row:span 3;font:500 13px/1.9 var(--f-mono);color:color-mix(in srgb,var(--paper) 55%,var(--ink))}
+.steps h3{font-size:22px;font-weight:700;letter-spacing:-.015em}
+.steps p{font-size:15px;line-height:1.5;color:color-mix(in srgb,var(--paper) 70%,var(--ink));max-width:46ch}
+.steps code{font-size:13px;color:var(--paper)}
+.steps .cmd::before{content:"> ";opacity:.5}
+.steps .cmd.shell::before{content:"$ "}
+.steps .cmd{justify-self:start;margin-top:6px;font-size:13px;padding:6px 10px;border-radius:6px;background:color-mix(in srgb,var(--paper) 9%,transparent);overflow-x:auto;max-width:100%;white-space:nowrap}
+.cc{position:sticky;top:24px;border-radius:12px;background:color-mix(in srgb,var(--paper) 6%,var(--ink));border:1px solid color-mix(in srgb,var(--paper) 14%,transparent);overflow:hidden;font:400 13.5px/1.6 var(--f-mono);color:var(--paper)}
+.cc-top{display:flex;justify-content:space-between;padding:11px 16px;font-size:12px;color:color-mix(in srgb,var(--paper) 55%,var(--ink));border-bottom:1px solid color-mix(in srgb,var(--paper) 10%,transparent)}
+.cc-body{padding:18px 18px 20px;display:grid;gap:14px;overflow-x:auto}
+.cc p{margin:0}
+.cc .you b{color:color-mix(in srgb,var(--accent) 55%,var(--paper));font-weight:500;margin-right:4px}
+.cc .cl{display:grid;gap:8px;padding-left:14px;border-left:2px solid color-mix(in srgb,var(--paper) 16%,transparent)}
+.cc .dim{color:color-mix(in srgb,var(--paper) 62%,var(--ink))}
+.cc .ok{color:color-mix(in srgb,var(--accent) 45%,var(--paper));display:inline-block;min-width:6ch}
+.cc .files2{gap:2px}
+.toks{display:flex;flex-wrap:wrap;gap:10px 12px;margin:4px 0}
+.toks span{display:grid;gap:4px;font-size:10.5px;color:color-mix(in srgb,var(--paper) 60%,var(--ink))}
+.toks i{display:block;width:44px;height:26px;border-radius:4px;box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--paper) 22%,transparent)}
+@media (max-width:900px){.how{grid-template-columns:1fr;gap:28px}}
+
+.lazy{margin-bottom:64px;border-radius:14px;background:color-mix(in srgb,var(--paper) 7%,var(--ink));border:1px solid color-mix(in srgb,var(--paper) 16%,transparent);display:grid;grid-template-columns:minmax(0,.8fr) minmax(0,1.2fr)}
+.lazy .ask{padding:28px;display:grid;gap:16px;align-content:start}
+.lazy h3{font-size:26px;font-weight:800}
+.lazy .ask p{font-size:15px;line-height:1.5;color:color-mix(in srgb,var(--paper) 70%,var(--ink))}
+.lazy pre{margin:0;padding:26px 28px;border-left:1px solid color-mix(in srgb,var(--paper) 14%,transparent);font:400 13.5px/1.65 var(--f-mono);color:var(--paper);white-space:pre-wrap;overflow-wrap:anywhere;min-width:0}
+.lazy pre mark{background:none;color:color-mix(in srgb,var(--accent) 45%,var(--paper))}
+.lazy .copy{justify-self:start;font:600 15px/1 var(--f-body);color:var(--ink);background:var(--paper);border:0;border-radius:99px;padding:13px 20px;cursor:pointer;min-width:14ch}
+.lazy .copy:hover{background:color-mix(in srgb,var(--accent) 30%,var(--paper))}
+.or{grid-column:1/-1;font:500 12px/1 var(--f-mono);letter-spacing:.08em;text-transform:uppercase;color:color-mix(in srgb,var(--paper) 60%,var(--ink));margin-bottom:-28px}
+@media (max-width:900px){.lazy{grid-template-columns:1fr}.lazy pre{border-left:0;border-top:1px solid color-mix(in srgb,var(--paper) 14%,transparent)}.or{margin-bottom:0}}
+
+.split{margin-top:80px;display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:20px}
+.col{border-radius:12px;padding:26px 26px 22px;display:grid;gap:16px;align-content:start}
+.col.theirs{border:1px dashed color-mix(in srgb,var(--paper) 30%,transparent)}
+.col.yours{background:var(--paper);color:var(--ink)}
+.col header{display:flex;justify-content:space-between;align-items:baseline;gap:12px}
+.col h3{font-size:22px;font-weight:700}
+.col header span{font:500 12px var(--f-mono);color:color-mix(in srgb,currentColor 60%,transparent)}
+.files{list-style:none;margin:0;padding:0;display:grid}
+.files li{display:grid;grid-template-columns:minmax(150px,auto) 1fr;gap:16px;padding:9px 0;border-top:1px solid color-mix(in srgb,currentColor 12%,transparent);font-size:14px;align-items:baseline}
+.files code{font-size:13.5px}
+.files li span{color:color-mix(in srgb,currentColor 62%,transparent)}
+.yours .files code{color:var(--accent);font-weight:500}
+@media (max-width:860px){.split{grid-template-columns:1fr}.files li{grid-template-columns:1fr;gap:2px}}
+
+.code2{margin-top:20px;display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.3fr);gap:20px}
+.pane{border-radius:12px;background:color-mix(in srgb,var(--paper) 7%,var(--ink));overflow:hidden}
+.pane .t{display:flex;justify-content:space-between;padding:12px 18px;font:500 12.5px var(--f-mono);color:color-mix(in srgb,var(--paper) 60%,var(--ink));border-bottom:1px solid color-mix(in srgb,var(--paper) 10%,transparent)}
+.pane pre{margin:0;padding:18px;overflow-x:auto;font-size:13px;line-height:1.7;color:var(--paper)}
+.pane .c{color:color-mix(in srgb,var(--paper) 45%,var(--ink))}
+.pane .k{color:color-mix(in srgb,var(--accent) 45%,var(--paper))}
+.pane .sw{display:inline-block;width:10px;height:10px;border-radius:2px;vertical-align:-1px;margin-right:6px;box-shadow:0 0 0 1px color-mix(in srgb,var(--paper) 25%,transparent)}
+@media (max-width:860px){.code2{grid-template-columns:1fr}}
+
+.ladder{margin-top:72px;border-top:1px solid color-mix(in srgb,var(--paper) 45%,transparent);padding-top:28px;display:grid;gap:28px}
+.ladder h3{font-size:clamp(24px,2.6vw,32px);font-weight:800;max-width:24ch}
+.ladder ol{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:0 28px;counter-reset:l}
+.ladder li{counter-increment:l;display:grid;gap:8px;align-content:start;padding-top:16px;border-top:1px solid color-mix(in srgb,var(--paper) 22%,transparent)}
+.ladder li::before{content:"Layer " counter(l);font:500 12px var(--f-mono);letter-spacing:.06em;text-transform:uppercase;color:color-mix(in srgb,var(--paper) 55%,var(--ink))}
+.ladder h4{margin:0;font:700 19px/1.2 var(--f-display);letter-spacing:-.01em}
+.ladder p{font-size:14.5px;line-height:1.5;color:color-mix(in srgb,var(--paper) 70%,var(--ink))}
+.ladder code{font-size:13px;color:var(--paper)}
+@media (max-width:900px){.ladder ol{grid-template-columns:repeat(2,minmax(0,1fr));gap:24px 28px}}
+@media (max-width:560px){.ladder ol{grid-template-columns:1fr}}
+
+/* updates */
+.upd{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:48px;align-items:start}
+.term{background:var(--ink);color:var(--paper);border-radius:12px;padding:20px 22px;font:400 13.5px/1.75 var(--f-mono);overflow-x:auto;white-space:pre}
+.term .p{color:color-mix(in srgb,var(--paper) 45%,var(--ink))}
+.term .ok{color:color-mix(in srgb,var(--accent) 40%,var(--paper))}
+.term .skip{color:color-mix(in srgb,var(--mark) 60%,var(--paper))}
+.flags{list-style:none;margin:22px 0 0;padding:0;display:grid}
+.flags li{display:grid;grid-template-columns:130px 1fr;gap:16px;padding:10px 0;border-top:1px solid var(--line);font-size:14.5px}
+.flags code{font-size:13.5px;color:var(--accent)}
+.flags span{color:var(--muted)}
+@media (max-width:860px){.upd{grid-template-columns:1fr}}
+
+.contract{margin-top:72px;border-top:1px solid var(--ink);padding-top:28px;display:grid;grid-template-columns:minmax(0,1fr) minmax(0,2.2fr);gap:24px 48px}
+.contract h3{font-size:24px;font-weight:700;margin-bottom:8px}
+.contract p{color:var(--muted);font-size:15px}
+.chips{display:flex;flex-wrap:wrap;gap:8px}
+.chips code{font-size:13px;padding:5px 10px;border-radius:99px;background:var(--soft);border:1px solid var(--line)}
+@media (max-width:860px){.contract{grid-template-columns:1fr}}
+
+.end{padding:120px 0 40px;display:grid;gap:26px;justify-items:start}
+.end h2{font-size:clamp(40px,6vw,76px);line-height:.95;font-weight:800;letter-spacing:-.045em;max-width:14ch}
+footer{border-top:1px solid var(--line);padding:22px 0 40px;display:flex;flex-wrap:wrap;gap:12px 28px;font-size:13.5px;color:var(--muted)}
+footer a{text-decoration:none}
+footer a:hover{color:var(--ink)}
+
+
+
+/* paths + chat guide */
+.paths{grid-column:1/-1;display:flex;flex-wrap:wrap;gap:8px 20px;align-items:center;margin-bottom:8px;font-size:14px}
+.paths .on{font-weight:600;padding:7px 12px;border-radius:99px;background:color-mix(in srgb,var(--paper) 12%,transparent)}
+.paths a{color:color-mix(in srgb,var(--paper) 65%,var(--ink));text-decoration:none}
+.paths a:hover{color:var(--paper)}
+.steps2{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(5,minmax(0,1fr));counter-reset:c;border-top:1px solid var(--ink)}
+.steps2 li{counter-increment:c;padding:20px 22px 0 0;display:grid;gap:8px;align-content:start}
+.steps2 li + li{padding-left:22px;border-left:1px solid var(--line)}
+.steps2 li::before{content:counter(c);font:500 13px var(--f-mono);color:var(--muted)}
+.steps2 h3{font-size:19px;font-weight:700;letter-spacing:-.01em}
+.steps2 p{font-size:14.5px;line-height:1.5;color:var(--muted)}
+.steps2 code{font-size:13px;color:var(--ink)}
+.say{font:400 13.5px/1.5 var(--f-mono);color:var(--accent);text-decoration:none}
+.steps2 p.say{color:var(--accent)}
+.later{margin-top:36px;padding-top:20px;border-top:1px solid var(--line);color:var(--muted);font-size:15px;max-width:80ch}
+.later b{color:var(--ink);font-weight:600}
+@media (max-width:980px){.steps2{grid-template-columns:repeat(2,minmax(0,1fr));gap:0 22px}.steps2 li + li{padding-left:0;border-left:0}.steps2 li{border-top:1px solid var(--line);padding-bottom:20px}}
+@media (max-width:560px){.steps2{grid-template-columns:1fr}}
+/* wordmark */
+.slay{display:inline-block;transition:opacity .13s ease,filter .13s ease,transform .13s ease;will-change:opacity}
+.slay.out{opacity:0;filter:blur(4px);transform:translateY(.06em)}
+.logo{display:inline-flex;align-items:baseline;height:26px}
+.word{font:800 clamp(96px,22vw,300px)/1 var(--f-display);letter-spacing:-.05em;margin:28px 0 0;height:1.3em;display:flex;align-items:baseline;white-space:nowrap;overflow:visible}
+
+
+@media (prefers-reduced-motion:reduce){.slay{transition:none}}
+@media (prefers-reduced-motion:reduce){html{scroll-behavior:auto}}
+</style>
+</head>
+<body>
+
+<div class="w">
+  <nav>
+    <a class="logo" href="#top" aria-label="slaydy"><span class="slay" data-slay="hover" style="color:inherit">slay</span>dy</a>
+    <div class="links">
+      <a href="#decks">The decks</a>
+      <a href="#fork">Fork it</a>
+      <a href="#chat">Without code</a>
+      <a href="#updates">Updates</a>
+      <a href="changelog.html">Changelog</a>
+      <a class="btn btn--sm" href="https://github.com/klarasch/slaydy">GitHub</a>
+    </div>
+  </nav>
+
+  <header class="hero" id="top">
+    <div class="desk" aria-label="Live slaydy demo deck">
+      <div class="frame" id="frame"><iframe id="deck" src="demo.html" title="slaydy demo deck" loading="eager"></iframe></div>
+      <div class="strip">
+        <div class="grp">
+          <span id="theme-label">Same deck, two themes</span>
+          <div class="sw2" role="radiogroup" aria-labelledby="theme-label">
+            <button type="button" role="radio" aria-checked="true" data-theme="slaydy"><i class="chip" style="background:linear-gradient(135deg,#fbfaf7 50%,#3a2fd6 50%)"></i>slaydy</button>
+            <button type="button" role="radio" aria-checked="false" data-theme="midnight"><i class="chip" style="background:linear-gradient(135deg,#0b0b0f 50%,#ff5b2e 50%)"></i>Stock midnight</button>
+          </div>
+        </div>
+        <div class="grp keys">
+          <span>Click the deck, then</span>
+          <button type="button" data-key="ArrowRight"><kbd>→</kbd> next</button>
+          <button type="button" data-key="e"><kbd>E</kbd> edit</button>
+          <button type="button" data-key="o"><kbd>O</kbd> overview</button>
+          <button type="button" data-key="t"><kbd>T</kbd> theme</button>
+          <a href="demo.html" target="_blank" rel="noopener">Full window ↗</a>
+        </div>
+      </div>
+      <div class="pitch">
+        <div>
+          <h1>slaydy is a deck skill for Claude that you put your brand on. <em>You never build the runtime.</em></h1>
+          <p class="lede">Fork it, hand Claude your website or brand PDF, and keep taking runtime updates. A brand starts as nine tokens and extends to your own layouts, CSS and scripts.</p>
+        </div>
+        <div class="cta">
+          <a class="btn btn--solid" href="#fork">Make your branded skill</a>
+          <a class="link" href="https://github.com/klarasch/slaydy">GitHub ↗</a>
+        </div>
+      </div>
+    </div>
+  </header>
+
+</div>
+
+<div class="w">
+<section id="decks">
+  <div class="sh">
+    <p class="eyebrow">What slaydy maintains, so you don’t</p>
+    <h2>Decks that stay editable, by hand and by Claude.</h2>
+    <p>Every deck is one HTML file on a runtime that keeps getting better without your fork doing anything. People fix it in the browser, Claude revises the same file, and nobody’s edits get thrown away.</p>
+  </div>
+  <div class="modes">
+    <div class="mode">
+      <h3>By hand</h3>
+      <p>Open <code>deck.html</code> in Chrome and press <kbd>E</kbd>.</p>
+      <ul class="fl">
+        <li>Click any text to rewrite it</li>
+        <li>Paste an image, drag it, resize it</li>
+        <li>Add, duplicate and reorder slides</li>
+        <li>Undo everything with <kbd>⌘Z</kbd></li>
+        <li>Save back into the deck’s own folder</li>
+      </ul>
+    </div>
+    <div class="mode">
+      <h3>With Claude</h3>
+      <p class="say">“apply my notes”</p>
+      <ul class="fl">
+        <li>Request a change right on the slide</li>
+        <li>Claude edits the same file in place</li>
+        <li>Fixes made by hand stay fixed</li>
+        <li>Layouts come from a fixed contract, so revisions don’t drift</li>
+      </ul>
+    </div>
+    <div class="mode">
+      <h3>Out the door</h3>
+      <p>Present, print, or send it.</p>
+      <ul class="fl">
+        <li><kbd>S</kbd> presenter view with notes on a second screen</li>
+        <li><kbd>P</kbd> PDF, one 16:9 page per slide, text stays text</li>
+        <li><kbd>D</kbd> one self-contained HTML file to share</li>
+        <li><kbd>O</kbd> overview of every slide</li>
+        <li><kbd>C</kbd> copy the current slide as a PNG</li>
+      </ul>
+    </div>
+  </div>
+</section>
+</div>
+
+<div class="fork" id="fork">
+<div class="w">
+<section>
+  <div class="sh">
+    <p class="eyebrow">For skill builders</p>
+    <h2>Your brand is one prompt. <em>The fork is a skill.</em></h2>
+    <p>The lazy way is one prompt pasted into Claude Code. The same thing as seven steps is right below it. Either way you end with an installed brand skill that keeps taking updates, and the runtime is never yours to touch.</p>
+  </div>
+  <div class="lazy" id="lazy">
+    <div class="ask">
+      <h3>The lazy way</h3>
+      <p>Copy this, replace the three brackets, and paste it into Claude Code in any folder. It clones slaydy, makes your fork and stops for your review before writing anything.</p>
+      <button type="button" class="copy" id="lz-copy">Copy prompt</button>
+    </div>
+    <pre class="out" id="lz-prompt" tabindex="0" aria-label="Setup prompt">Set up a slaydy deck skill for my brand.
+
+Brand: <mark>[brand name]</mark>
+Skill name: <mark>[what to call the skill, by default brandname-decks]</mark>
+References: <mark>[where to find the brand: the website, and anything else worth reading, such as a brand guidelines page or where the logo is]</mark>
+
+1. If ~/Code/slaydy does not exist, clone https://github.com/klarasch/slaydy.git there. Never edit that checkout.
+2. Read ~/Code/slaydy/SKILL.md section 8 and follow it: make the fork beside the checkout and read my brand from the references above.
+3. Show me the colours, type and voice rules before writing any file, and wait for my go.
+4. Then write the brand, build the skill, check that a sample deck renders, and commit.
+5. Ask me before installing the skill or creating a GitHub repo.</pre>
+  </div>
+  <div class="how" id="code">
+    <p class="or">Or step by step</p>
+    <div class="paths"><span class="on">In Claude Code</span><a href="#chat">No terminal? Do it in Claude chat ↓</a></div>
+    <ol class="steps">
+      <li><h3>Get slaydy</h3><p>Clone it where you keep code. This checkout is upstream: you never edit it, and every brand fork on your machine updates from it.</p><code class="cmd shell">git clone https://github.com/klarasch/slaydy ~/Code/slaydy</code></li>
+      <li><h3>Open it in Claude Code</h3><p>The repo tells Claude how to set up a brand, so nothing needs installing yet.</p><code class="cmd shell">cd ~/Code/slaydy &amp;&amp; claude</code></li>
+      <li><h3>Ask for your brand</h3><p>Hand over a website, a brand PDF or a logo. Claude makes the fork, <code>~/Code/acme-decks</code>, beside slaydy and reads the brand.</p><code class="cmd">set up slaydy for Acme from acme.com</code></li>
+      <li><h3>Review it</h3><p>Colors, type and voice rules come back before a single file is written. Say go, or say what’s off.</p><code class="cmd">go</code></li>
+      <li><h3>Install it</h3><p>Claude writes the brand, builds <code>acme-decks</code>, checks a sample deck renders, commits, and installs on your yes. From then on, “make me a deck” comes out in Acme.</p><code class="cmd">yes, install it</code></li>
+      <li><h3>Share it</h3><p>Claude creates a private GitHub repo only when you ask. Teammates install <code>acme-decks-skill.zip</code> or build from the repo.</p><code class="cmd">push the fork to GitHub</code></li>
+      <li><h3>Take updates</h3><p>When slaydy releases, open <code>acme-decks</code> in Claude Code. One prompt pulls, copies the runtime in, rebuilds, and tells you what changed.</p><code class="cmd">take the slaydy update</code></li>
+    </ol>
+    <div class="cc" role="img" aria-label="Example Claude Code session setting up the Acme brand">
+      <div class="cc-top"><span>claude</span><span>~/Code/slaydy</span></div>
+      <div class="cc-body">
+        <p class="you"><b>&gt;</b> set up slaydy for Acme from acme.com, logo is in ~/Downloads/acme.svg</p>
+        <div class="cl">
+          <p class="dim">This is slaydy itself, so Acme gets its own fork: ~/Code/acme-decks.</p>
+          <p>Read acme.com. Here’s the brand before I write anything:</p>
+          <div class="toks">
+            <span><i style="background:#dfe4ec"></i>app-bg</span><span><i style="background:#ffffff"></i>bg</span><span><i style="background:#1b2b4b"></i>fg</span><span><i style="background:#f1f4f8"></i>surface</span><span><i style="background:#0a66ff"></i>accent</span><span><i style="background:#ffb000"></i>accent-2</span><span><i style="background:#ffffff"></i>accent-fg</span>
+          </div>
+          <p class="dim">Type: Manrope for headlines and body. Wash off, it reads as a startup deck.</p>
+          <p class="dim">Voice: sentence-case headlines, no “synergy”, every deck ends on a next step.</p>
+        </div>
+        <p class="you"><b>&gt;</b> go</p>
+        <div class="cl files2">
+          <p><span class="ok">wrote</span> themes/acme.css, themes/acme.md, images/logo.svg</p>
+          <p><span class="ok">wrote</span> SKILL.fork.md <span class="dim">name: acme-decks</span></p>
+          <p><span class="ok">wrote</span> skeleton.html</p>
+          <p><span class="ok">built</span> dist/acme-decks/</p>
+          <p><span class="ok">check</span> 3-slide deck renders in Acme</p>
+          <p><span class="ok">commit</span> Acme brand</p>
+          <p class="dim" style="margin-top:8px">Install to ~/.claude/skills/acme-decks?</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="split">
+    <div class="col theirs">
+      <header><h3>slaydy maintains</h3><span>replaced on every update</span></header>
+      <ul class="files">
+        <li><code>runtime.js</code><span>nav, overview, edit, presenter, save</span></li>
+        <li><code>runtime.css</code><span>layout library and print styles</span></li>
+        <li><code>SKILL.md</code><span>modes, brief, generation procedure</span></li>
+        <li><code>LAYOUTS.md</code><span>the markup contract Claude follows</span></li>
+        <li><code>build.sh</code><span>assembles the skill into <code>dist/</code></span></li>
+        <li><code>standalone.py</code><span>builds the single shareable file</span></li>
+      </ul>
+    </div>
+    <div class="col yours">
+      <header><h3>You maintain the brand</h3><span>Claude writes it, no update touches it</span></header>
+      <ul class="files">
+        <li><code>SKILL.fork.md</code><span>skill name, description, standing orders</span></li>
+        <li><code>themes/acme.css</code><span>nine tokens and any brand CSS</span></li>
+        <li><code>themes/acme.md</code><span>the brand’s voice and rules</span></li>
+        <li><code>skeleton.html</code><span>deck shell: links, fonts, body attributes</span></li>
+        <li><code>fonts/ images/</code><span>licensed fonts, the mark, art</span></li>
+        <li><code>custom/</code><span>bespoke layouts, when you ask for them</span></li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="code2">
+    <div class="pane">
+      <div class="t"><span>themes/acme.css</span><span>9 tokens</span></div>
+<pre><span class="k">:root</span> {
+  --app-bg:   <span class="sw" style="background:#dfe4ec"></span>#dfe4ec;
+  --bg:       <span class="sw" style="background:#ffffff"></span>#ffffff;
+  --fg:       <span class="sw" style="background:#1b2b4b"></span>#1b2b4b;
+  --muted:    rgba(27, 43, 75, 0.56);
+  --faint:    rgba(27, 43, 75, 0.13);
+  --surface:  <span class="sw" style="background:#f1f4f8"></span>#f1f4f8;
+  --accent:   <span class="sw" style="background:#0a66ff"></span>#0a66ff;
+  --accent-2: <span class="sw" style="background:#ffb000"></span>#ffb000;
+  --accent-fg:<span class="sw" style="background:#ffffff"></span>#ffffff;
+}</pre>
+    </div>
+    <div class="pane">
+      <div class="t"><span>SKILL.fork.md</span><span>your identity</span></div>
+<pre><span class="c">---</span>
+<span class="k">name:</span> acme-decks
+<span class="k">description:</span> Generate editable, Acme-branded HTML
+  slide decks and revise existing ones. Use whenever
+  the user wants slides, a deck, a pitch, a talk.
+<span class="c">---</span>
+
+**This install is brand-locked to Acme.** Always copy
+themes/acme.css, fonts/ and images/; never set
+data-themes; never ask which theme. Read
+themes/acme.md before writing a slide.</pre>
+    </div>
+  </div>
+  <div class="ladder">
+    <h3>Nine tokens is the easy start, not the limit.</h3>
+    <ol>
+      <li><h4>Tokens</h4><p>Colours, typefaces, radius and the wash restyle every layout at once. Most brands stop here.</p></li>
+      <li><h4>Theme CSS</h4><p>The theme is a full stylesheet loaded after the runtime: patterns, section treatments, your own emphasis style.</p></li>
+      <li><h4>Your own layouts</h4><p>Define <code>slide--acme-demo</code>, describe it in <code>themes/acme.md</code>, and Claude generates and revises it.</p></li>
+      <li><h4>Scripts and graphics</h4><p>A <code>custom/</code> folder adds behaviour on runtime events: animation, widgets, interactive slides like the one in the demo.</p></li>
+    </ol>
+  </div>
+</section>
+</div>
+</div>
+
+<div class="w">
+<section id="chat">
+  <div class="sh">
+    <p class="eyebrow">Without code</p>
+    <h2>Same skill, made in Claude chat.</h2>
+    <p>No terminal, no git. Upload slaydy to Claude desktop or claude.ai, ask for your brand in a chat, and Claude hands back your own skill as a zip to upload next to it.</p>
+  </div>
+  <ol class="steps2">
+    <li><h3>Download slaydy</h3><p>Get <code>slaydy-skill.zip</code> from the latest release on GitHub.</p><a class="say" href="https://github.com/klarasch/slaydy/releases/latest">Latest release ↗</a></li>
+    <li><h3>Upload it to Claude</h3><p>In Settings › Capabilities › Skills, upload the zip. Code execution needs to be on.</p></li>
+    <li><h3>Ask for your brand</h3><p>In a new chat, name the brand. Attach a brand PDF or a logo if you have one.</p><p class="say">“set up slaydy for Acme from acme.com”</p></li>
+    <li><h3>Review it</h3><p>Colors, type and voice rules come back first. Say go, or say what’s off.</p><p class="say">“go”</p></li>
+    <li><h3>Upload your skill</h3><p>Claude hands back <code>acme-decks-skill.zip</code>. Upload it the same way, turn off plain slaydy, and send the zip to your team.</p></li>
+  </ol>
+  <p class="later"><b>Updating later:</b> upload the new slaydy zip, then ask <span class="say">“update my Acme skill”</span>. You get a fresh zip with the new runtime and your brand untouched.</p>
+</section>
+</div>
+
+<div class="w">
+<section id="updates">
+  <div class="upd">
+    <div>
+      <p class="eyebrow" style="margin-bottom:18px">Updates</p>
+      <h2 style="font-size:clamp(32px,4.2vw,54px);line-height:1;font-weight:800;margin-bottom:22px">One prompt, never a merge.</h2>
+      <p style="color:var(--muted);font-size:17px;max-width:48ch">Everything slaydy ships is replaceable, and everything yours lives in files a release never contains. Ask Claude to take the latest slaydy update and it runs <code>take-update.sh</code>, which refuses to overwrite a file your fork edited, names it, and takes the rest.</p>
+      <ul class="flags">
+        <li><code>--dry-run</code><span>report what would change, copy nothing</span></li>
+        <li><code>--check</code><span>list upstream files the fork edited; cheap enough for a pre-commit hook</span></li>
+        <li><code>--force</code><span>overwrite fork-edited files anyway</span></li>
+      </ul>
+      <p style="margin-top:24px"><a class="btn" href="changelog.html">Read the changelog →</a></p>
+      <p style="margin-top:12px;color:var(--muted);font-size:14.5px;max-width:48ch">Every entry is marked as a new feature or a fix, and says whether a fork has nothing to do, something to check, or something to port.</p>
+    </div>
+    <div class="term" role="img" aria-label="Example update run in Claude Code"><span class="p">&gt;</span> take the slaydy update
+<span class="p">pulled</span> ~/Code/slaydy, 6 new commits
+<span class="ok">took</span>  runtime.js  runtime.css  SKILL.md  LAYOUTS.md
+<span class="skip">skip</span>  build.sh  <span class="p">(edited in this fork, moved to SKILL.fork.md?)</span>
+<span class="p">kept</span>  SKILL.fork.md  themes/acme.css  fonts/
+<span class="ok">built</span> dist/acme-decks/
+<span class="ok">check</span> 3-slide deck renders in Acme
+<span class="ok">commit</span> Take slaydy 53584be
+
+New since last time: presenter view advances on click.
+Reinstall to ~/.claude/skills/acme-decks?</div>
+  </div>
+
+  <div class="contract">
+    <div>
+      <h3>A contract, not a template</h3>
+      <p>Claude picks from these layouts instead of inventing one. Releases add classes; they never rename or remove them, so decks from last year and your customisations both survive.</p>
+    </div>
+    <div class="chips">
+      <code>title</code><code>agenda</code><code>section</code><code>statement</code><code>bullets</code><code>split</code><code>cards</code><code>bento</code><code>stats</code><code>number</code><code>table</code><code>compare</code><code>timeline</code><code>quote</code><code>code</code><code>image</code><code>full</code><code>gallery</code><code>callout</code><code>callout-full</code><code>placeholder</code><code>end</code>
+    </div>
+  </div>
+</section>
+
+<div class="end">
+  <h2>Put your brand on it by Friday.</h2>
+  <div class="cta" style="display:flex;gap:12px;flex-wrap:wrap">
+    <a class="btn btn--solid" href="#fork">Make your branded skill</a>
+    <a class="btn" href="https://github.com/klarasch/slaydy/blob/master/BRANDING.md">Read BRANDING.md</a>
+  </div>
+  <p class="word" aria-label="slaydy"><span class="slay" data-slay="auto" aria-hidden="true">slay</span><span aria-hidden="true">dy</span></p>
+</div>
+<footer>
+  <span>slaydy</span>
+  <a href="https://github.com/klarasch/slaydy">GitHub</a>
+  <a href="https://github.com/klarasch/slaydy/blob/master/CUSTOMIZING.md">Customizing</a>
+  <a href="https://github.com/klarasch/slaydy/blob/master/UPDATING.md">Updating</a>
+  <a href="changelog.html">Changelog</a>
+  <a href="demo.html">Demo deck, full window</a>
+</footer>
+</div>
+
+<script>
+(() => {
+  // "slay" wears a different theme every few seconds; "dy" stays put
+  const LOOKS = [
+    {font:"var(--f-display)", weight:800, style:"normal", color:"var(--ink)", name:"your display face"},
+    {font:'"Instrument Serif",serif', weight:400, style:"italic", color:"var(--mark)", name:"Instrument Serif italic"},
+    {font:'"Unbounded",sans-serif', weight:800, style:"normal", color:"var(--accent)", name:"Unbounded"},
+    {font:'"Space Mono",monospace', weight:700, style:"normal", color:"var(--mark)", name:"Space Mono"},
+    {font:'"Fraunces",serif', weight:900, style:"italic", color:"var(--accent)", name:"Fraunces black italic"},
+    {font:'"Syne",sans-serif', weight:800, style:"normal", color:"var(--mark)", name:"Syne"}
+  ];
+  const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
+  function wear(el, look) {
+    el.style.fontFamily = look.font; el.style.fontWeight = look.weight; el.style.fontStyle = look.style; el.style.color = look.color;
+  }
+  function swap(el, i, onName) {
+    const look = LOOKS[i % LOOKS.length];
+    if (reduce) { wear(el, look); onName && onName(look.name); return; }
+    el.classList.add("out");
+    setTimeout(() => { wear(el, look); onName && onName(look.name); el.classList.remove("out"); }, 130);
+  }
+
+  const big = document.querySelector('[data-slay="auto"]');
+  let n = 0, visible = false;
+  new IntersectionObserver(([e]) => { visible = e.isIntersecting; }).observe(big);
+  if (!reduce) setInterval(() => { if (visible && !document.hidden) swap(big, ++n); }, 1100);
+
+  const small = document.querySelector('[data-slay="hover"]');
+  let h = 0, ht = null;
+  const logo = small.parentElement;
+  logo.addEventListener("mouseenter", () => { swap(small, ++h); ht = setInterval(() => swap(small, ++h), 900); });
+  logo.addEventListener("mouseleave", () => { clearInterval(ht); h = 0; swap(small, 0); small.style.color = "inherit"; });
+})();
+
+// live deck: key hints, theme switch, focus ring (same-origin iframe, all guarded)
+(() => {
+  const frame = document.getElementById("frame"), ifr = document.getElementById("deck");
+  const radios = [...document.querySelectorAll('.sw2 [role=radio]')];
+  let mo = null;
+  const doc = () => { try { return ifr.contentDocument; } catch (e) { return null; } };
+  function press(key) {
+    try {
+      ifr.contentWindow.focus();
+      const d = doc();
+      if (d && d.body) d.body.dispatchEvent(new KeyboardEvent("keydown", {key, bubbles:true, cancelable:true}));
+    } catch (e) {}
+  }
+  function current() {
+    try {
+      const l = doc().getElementById("theme");
+      return l && (l.getAttribute("href").match(/([^/]+)\.css$/) || [])[1] || null;
+    } catch (e) { return null; }
+  }
+  function sync() {
+    const c = current();
+    if (c) radios.forEach(r => r.setAttribute("aria-checked", String(r.dataset.theme === c)));
+  }
+  document.querySelectorAll(".keys [data-key]").forEach(b => b.addEventListener("click", () => press(b.dataset.key)));
+  radios.forEach(r => r.addEventListener("click", () => {
+    const c = current();
+    if (c && c !== r.dataset.theme) press("t");
+    else if (!c) radios.forEach(x => x.setAttribute("aria-checked", String(x === r)));
+  }));
+  function wire() {
+    try {
+      if (mo) mo.disconnect();
+      sync();
+      const l = doc().getElementById("theme");
+      if (l) { mo = new MutationObserver(sync); mo.observe(l, {attributes:true, attributeFilter:["href"]}); }
+      const w = ifr.contentWindow;
+      w.addEventListener("focus", () => frame.classList.add("focus"));
+      w.addEventListener("blur", () => frame.classList.remove("focus"));
+    } catch (e) {}
+  }
+  ifr.addEventListener("load", wire);
+  try { if (doc() && doc().readyState === "complete" && doc().location.href !== "about:blank") wire(); } catch (e) {}
+})();
+
+(() => {
+  // the lazy way: copy the prompt as written
+  const out = document.getElementById("lz-prompt"), btn = document.getElementById("lz-copy");
+  if (!out || !btn) return;
+  btn.addEventListener("click", async () => {
+    try { await navigator.clipboard.writeText(out.textContent); btn.textContent = "Copied"; }
+    catch (e) { const r = document.createRange(); r.selectNodeContents(out); const sel = getSelection(); sel.removeAllRanges(); sel.addRange(r); btn.textContent = "Press ⌘C"; }
+    setTimeout(() => { btn.textContent = "Copy prompt"; }, 1800);
+  });
+})();
+</script>
+
+</body>
+</html>

@@ -8,20 +8,32 @@ commit. Each entry says what changed and, under **Forks**, what a fork has to do
 delete. "Nothing" is a valid answer and should be written out.
 
 Tags on an entry: **runtime** (runtime.*), **docs** (the contract docs), **skeleton**
-(skeleton.html — port by hand), **attribute** (new or changed `data-*` a deck can carry).
+(skeleton.html — port by hand), **attribute** (new or changed `data-*` a deck can carry), and
+one kind: **feature** or **fix**.
+
+The **Forks:** line opens with one word, which the site's changelog page (`site/changelog.html`)
+turns into a badge: **nothing** (no fork has anything to do), **check** (only a fork that touches
+the named thing has something to do or to delete), **port** (every fork has to act).
 
 ---
 
 ## 2026-10-04
 
+### Changelog entries carry a kind and a fork level
+**docs, feature** — Entries are now tagged `feature` or `fix`, and every Forks line opens
+with `nothing`, `check` or `port`. `site/changelog.html` renders this file with those as
+badges and filters.
+
+**Forks:** nothing. A fork that keeps its own changelog in this format can adopt the same words.
+
 ### `C` copies the current slide as a PNG
-**runtime** — A single-key shortcut for the Copy slide as PNG item; listed in the Export menu and
+**runtime, feature** — A single-key shortcut for the Copy slide as PNG item; listed in the Export menu and
 the `?` sheet. Ignored with Cmd/Ctrl/Alt held and while typing.
 
-**Forks:** `C` is now taken by the runtime. Rebind it if a brand extension uses it.
+**Forks:** check. `C` is now taken by the runtime. Rebind it if a brand extension uses it.
 
 ### Copy or download the current slide as a PNG; Export menu
-**runtime**
+**runtime, feature**
 - The toolbar's "Export PDF" button is now "Export" and opens a small menu: PDF (the `P` key still
   goes straight to it), Copy slide as PNG, Download slide as PNG.
 - The slide is cloned into an SVG `<foreignObject>`, drawn to a canvas at 2x (2560x1440) and encoded.
@@ -32,27 +44,27 @@ the `?` sheet. Ignored with Cmd/Ctrl/Alt held and while typing.
   from `file://` with external assets gets a toast listing what could not be included.
 - Chromium first; Safari renders foreignObject less faithfully.
 
-**Forks:** nothing to port. A fork that overrides `#btn-print` or relabels "Export PDF" should check
+**Forks:** check. Nothing to port, but a fork that overrides `#btn-print` or relabels "Export PDF" should check
 it. Styles that depend on selectors other than `html`, `body`, `:root` or the slide's own ancestors
 (`.deck`) will not apply inside the image.
 
 ### Slide-options dropdowns get their own chevron
-**runtime** — `.opt-select` showed the native chevron flush against the right border. It now draws
+**runtime, fix** — `.opt-select` showed the native chevron flush against the right border. It now draws
 its own chevron with right padding so the label cannot run under it.
 
-**Forks:** drop any `select` chevron override in the slide-options panel.
+**Forks:** check. Drop any `select` chevron override in the slide-options panel.
 
 ### Overflow guard measures with bounding rects
-**runtime**
+**runtime, fix**
 - `overflows()` used `offsetTop`/`offsetHeight`, which current Chrome reports in the element's own
   zoomed units, so the `data-fit` zoom cancelled itself out and slides that overflowed slightly were
   always shrunk to 0.8 and flagged "Too much text". It now uses `getBoundingClientRect()` divided by
   the stage scale.
 
-**Forks:** drop any workaround for the shrink step not working.
+**Forks:** check. Drop any workaround for the shrink step not working.
 
 ### Sticker snapping, behind-text layer, grouped Slide options — `87c77cd`
-**runtime, docs, attribute**
+**runtime, docs, attribute, feature**
 - Dragging a sticker snaps its edges and centre to the slide's `--pad` margins and centre lines;
   guide lines show (`data-gen`, never saved). Alt drags freely.
 - New `data-layer="back"` on a sticker puts it behind the slide's text (z-index -1). The sticker
@@ -63,30 +75,30 @@ its own chevron with right padding so the label cannot run under it.
 - The presenter now sees sticker nudges and edits (`deckVersion`, per-session id).
 - The sticker bar follows the sticker on resize; overview thumbnails follow edit mode.
 
-**Forks:** nothing to port. A brand's own `slide options` rows get the new grouping and hints
+**Forks:** check. Nothing to port. A brand's own `slide options` rows get the new grouping and hints
 for free if they set `group` / `hint`. Check any custom CSS that sets `z-index` on `.sticker`:
 back stickers use -1, front use 4.
 
 ### Label the sticker bar's delete button — `17ccb2e`
-**runtime** — Cosmetic. **Forks:** nothing.
+**runtime, fix** — Cosmetic. **Forks:** nothing.
 
 ### Fix sticker bar lingering in view mode, presenter missing deck changes, bar tooltips — `ed6a967`
-**runtime** — Bug fixes. **Forks:** nothing. Drop any workaround you carry for the bar staying
+**runtime, fix** — Bug fixes. **Forks:** check. Drop any workaround you carry for the bar staying
 visible in view mode.
 
 ### Drag to reorder slides, a blank slide, sticker shadow toggle, SVG paste — `bf4e784`
-**runtime** — **Forks:** nothing.
+**runtime, feature** — **Forks:** nothing.
 
 ### Text boxes in the deck's own type styles, and rotation for stickers — `dc8882d`
-**runtime, docs, attribute** — `.sticker.sticker--text` takes one of the deck's type classes and
+**runtime, docs, attribute, feature** — `.sticker.sticker--text` takes one of the deck's type classes and
 `data-align`; stickers rotate via `rotate:` in their inline style. See LAYOUTS.md.
-**Forks:** make sure your theme defines the type classes text boxes will offer.
+**Forks:** port. Make sure your theme defines the type classes text boxes will offer.
 
 ### Overview select mode: download a copy without, or with only, the picked slides — `7ce77bc`
-**runtime** — **Forks:** nothing.
+**runtime, feature** — **Forks:** nothing.
 
 ### Loading cover, and the upstream report's fixes — `70ec072`
-**runtime** — **Forks:** nothing.
+**runtime, feature, fix** — **Forks:** nothing.
 
 ---
 

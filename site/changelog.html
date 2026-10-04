@@ -1,0 +1,232 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Changelog — slaydy</title>
+<meta name="description" content="What changed in slaydy, newest first: new features, fixes, and what each change means for a brand fork.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,600;12..96,800&amp;family=IBM+Plex+Sans:wght@400;500;600&amp;family=IBM+Plex+Mono:wght@400;500&amp;display=swap">
+<style>
+:root{
+  --page:#f2f0ea; --paper:#fbfaf7; --ink:#131318; --accent:#3a2fd6; --mark:#d93a1f;
+  --muted:color-mix(in srgb,var(--ink) 62%,var(--paper));
+  --line:color-mix(in srgb,var(--ink) 14%,transparent);
+  --soft:color-mix(in srgb,var(--ink) 5%,var(--paper));
+  --f-display:"Bricolage Grotesque",ui-sans-serif,system-ui,sans-serif;
+  --f-body:"IBM Plex Sans",ui-sans-serif,system-ui,sans-serif;
+  --f-mono:"IBM Plex Mono",ui-monospace,Menlo,monospace;
+  color-scheme:light;
+}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+body{margin:0;background:var(--page);color:var(--ink);font:16px/1.6 var(--f-body);-webkit-font-smoothing:antialiased}
+a{color:inherit}
+:focus-visible{outline:2px solid var(--accent);outline-offset:3px;border-radius:3px}
+.w{max-width:1200px;margin:0 auto;padding:0 28px}
+code{font-family:var(--f-mono);font-size:.88em;padding:.1em .35em;border-radius:4px;background:color-mix(in srgb,var(--ink) 7%,transparent)}
+h1,h2,h3{font-family:var(--f-display);margin:0;letter-spacing:-.025em}
+p{margin:0}
+nav{display:flex;align-items:center;gap:28px;padding:22px 0}
+.logo{font:800 22px/1 var(--f-display);letter-spacing:-.04em;text-decoration:none}
+nav .links{display:flex;align-items:center;gap:22px;margin-left:auto;font-size:14px}
+nav .links a{text-decoration:none;color:var(--muted)}
+nav .links a:hover,nav .links a[aria-current]{color:var(--ink)}
+.btn{display:inline-flex;align-items:center;font:600 13.5px/1 var(--f-body);text-decoration:none;padding:9px 14px;border-radius:99px;border:1px solid var(--ink);white-space:nowrap}
+nav .links a.btn{color:var(--ink)}
+@media (max-width:720px){nav .links a:not(.btn):not([aria-current]){display:none}}
+
+.head{padding:56px 0 36px;display:grid;gap:18px;max-width:820px}
+.eyebrow{font:500 12px/1 var(--f-mono);letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.head h1{font-size:clamp(40px,6vw,72px);line-height:.95;font-weight:800;letter-spacing:-.045em}
+.head p{color:var(--muted);font-size:17px;max-width:60ch}
+
+/* badges */
+.b{display:inline-flex;align-items:center;gap:6px;font:500 11.5px/1 var(--f-mono);letter-spacing:.04em;text-transform:uppercase;padding:5px 8px;border-radius:5px;white-space:nowrap}
+.b--feature{background:var(--ink);color:var(--paper)}
+.b--fix{box-shadow:inset 0 0 0 1px var(--ink)}
+.b--area{color:var(--muted);box-shadow:inset 0 0 0 1px var(--line)}
+.b--nothing{color:var(--muted);background:color-mix(in srgb,var(--ink) 6%,transparent)}
+.b--check{color:var(--accent);background:color-mix(in srgb,var(--accent) 11%,transparent)}
+.b--port{color:var(--paper);background:var(--mark)}
+
+.legend{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));border-top:1px solid var(--ink);margin-bottom:28px}
+.legend div{padding:18px 24px 6px 0;display:grid;gap:8px;align-content:start;justify-items:start}
+.legend div+div{padding-left:24px;border-left:1px solid var(--line)}
+.legend p{font-size:14.5px;line-height:1.5;color:var(--muted)}
+@media (max-width:760px){.legend{grid-template-columns:1fr}.legend div+div{padding-left:0;border-left:0;border-top:1px solid var(--line)}}
+
+.bar{position:sticky;top:0;z-index:2;display:flex;flex-wrap:wrap;gap:10px 18px;align-items:center;padding:12px 0;background:color-mix(in srgb,var(--page) 92%,transparent);backdrop-filter:blur(8px);border-bottom:1px solid var(--line);font-size:13.5px}
+.seg{display:inline-flex;gap:2px;padding:2px;border:1px solid var(--line);border-radius:99px}
+.seg button,.tog{font:500 13px/1 var(--f-body);color:var(--muted);background:none;border:0;border-radius:99px;padding:7px 12px;cursor:pointer}
+.seg button:hover,.tog:hover{color:var(--ink)}
+.seg button[aria-checked=true],.tog[aria-pressed=true]{background:var(--ink);color:var(--paper)}
+.tog{box-shadow:inset 0 0 0 1px var(--line)}
+.tog[aria-pressed=true]{box-shadow:none}
+.bar .count{margin-left:auto;color:var(--muted);font-family:var(--f-mono);font-size:12.5px}
+
+.day{display:grid;grid-template-columns:150px minmax(0,1fr);gap:0 40px;padding-top:36px}
+.day>h2{font:500 13px/1.6 var(--f-mono);letter-spacing:.02em;color:var(--muted);position:sticky;top:64px;align-self:start}
+.day ol{list-style:none;margin:0;padding:0;display:grid}
+.entry{display:grid;gap:12px;padding:0 0 30px;margin-bottom:30px;border-bottom:1px solid var(--line)}
+.entry:last-child{margin-bottom:0}
+.entry .tags{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.entry .tags a{margin-left:auto;font:400 12.5px var(--f-mono);color:var(--muted);text-decoration:none}
+.entry .tags a:hover{color:var(--ink)}
+.entry h3{font-size:clamp(21px,2.2vw,27px);line-height:1.12;font-weight:700;letter-spacing:-.02em;text-wrap:balance;max-width:34ch}
+.entry h3 code{font-size:.8em}
+.entry .body{display:grid;gap:8px;color:var(--muted);font-size:15.5px;max-width:74ch}
+.entry .body ul{margin:0;padding-left:18px;display:grid;gap:6px}
+.entry .body b{color:var(--ink);font-weight:600}
+.forks{display:grid;grid-template-columns:auto minmax(0,1fr);gap:8px 14px;align-items:baseline;padding:14px 16px;border-radius:10px;background:var(--paper);box-shadow:0 0 0 1px var(--line);font-size:15px;max-width:78ch}
+.forks .lbl{grid-column:1/-1;font:500 12px/1 var(--f-mono);letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.forks.is-port{box-shadow:0 0 0 1.5px var(--mark)}
+.forks.is-check{box-shadow:0 0 0 1px color-mix(in srgb,var(--accent) 45%,transparent)}
+@media (max-width:760px){.day{grid-template-columns:1fr}.day>h2{position:static;margin-bottom:14px}.forks{grid-template-columns:1fr}}
+.empty,.note{padding:36px 0;color:var(--muted)}
+.note{font-size:14.5px;border-top:1px solid var(--line);margin-top:36px}
+footer{border-top:1px solid var(--line);margin-top:56px;padding:22px 0 40px;display:flex;flex-wrap:wrap;gap:12px 28px;font-size:13.5px;color:var(--muted)}
+footer a{text-decoration:none}
+footer a:hover{color:var(--ink)}
+</style>
+</head>
+<body>
+<div class="w">
+  <nav>
+    <a class="logo" href="index.html" aria-label="slaydy, home">slaydy</a>
+    <div class="links">
+      <a href="index.html#decks">The decks</a>
+      <a href="index.html#fork">Fork it</a>
+      <a href="index.html#chat">Without code</a>
+      <a href="index.html#updates">Updates</a>
+      <a href="changelog.html" aria-current="page">Changelog</a>
+      <a class="btn" href="https://github.com/klarasch/slaydy">GitHub</a>
+    </div>
+  </nav>
+
+  <header class="head">
+    <p class="eyebrow">Changelog</p>
+    <h1>What changed, and what your fork does about it.</h1>
+    <p>Newest first. Every entry says whether it is a new feature or a fix, and what a brand fork has to do. This is the same text <code>take-update.sh</code> prints when a fork takes an update.</p>
+  </header>
+
+  <div class="legend" aria-label="What the fork badges mean">
+    <div><span class="b b--nothing">Forks: nothing to do</span><p>Take the update. Nothing in a fork changes.</p></div>
+    <div><span class="b b--check">Forks: check</span><p>Only matters if your fork touches the thing named: an override to review or a workaround to delete.</p></div>
+    <div><span class="b b--port">Forks: port</span><p>Every fork has to make a change for this to work.</p></div>
+  </div>
+
+  <div class="bar">
+    <div class="seg" role="radiogroup" aria-label="Kind of change">
+      <button type="button" role="radio" aria-checked="true" data-kind="all">All</button>
+      <button type="button" role="radio" aria-checked="false" data-kind="feature">New features</button>
+      <button type="button" role="radio" aria-checked="false" data-kind="fix">Fixes</button>
+    </div>
+    <button type="button" class="tog" aria-pressed="false" id="forks-only">Only what forks act on</button>
+    <span class="count" id="count" aria-live="polite"></span>
+  </div>
+
+  <main id="log"><p class="empty">Loading the changelog.</p></main>
+
+  <footer>
+    <a href="index.html">slaydy</a>
+    <a href="https://github.com/klarasch/slaydy/blob/master/CHANGELOG.md">CHANGELOG.md on GitHub</a>
+    <a href="https://github.com/klarasch/slaydy/blob/master/UPDATING.md">Updating a fork</a>
+  </footer>
+</div>
+
+<script>
+(() => {
+  // Renders ../CHANGELOG.md, the file take-update.sh reads, so the page cannot drift from it.
+  const SRC = "../CHANGELOG.md", REPO = "https://github.com/klarasch/slaydy";
+  const KINDS = { feature: "New", fix: "Fix" };
+  const LEVELS = { nothing: "Forks: nothing to do", check: "Forks: check", port: "Forks: port" };
+  const log = document.getElementById("log");
+  const esc = t => t.replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+  const inline = t => esc(t).replace(/`([^`]+)`/g, "<code>$1</code>").replace(/\*\*([^*]+)\*\*/g, "<b>$1</b>");
+  const fmtDate = d => { const t = new Date(d + "T12:00:00"); return isNaN(t) ? d : t.toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" }); };
+
+  function parse(md) {
+    const parts = md.split(/^---\s*$/m);            // preamble, entries, footer note
+    const days = []; let day = null, entry = null;
+    for (const line of (parts[1] || "").split("\n")) {
+      let m;
+      if ((m = line.match(/^## (.+)/))) { day = { date: m[1].trim(), entries: [] }; days.push(day); entry = null; }
+      else if ((m = line.match(/^### (.+)/)) && day) {
+        const h = m[1].match(/^(.*?)\s+—\s+`([0-9a-f]{7,40})`\s*$/);
+        entry = { title: h ? h[1] : m[1], hash: h ? h[2] : "", raw: [] }; day.entries.push(entry);
+      } else if (entry) entry.raw.push(line);
+    }
+    for (const d of days) for (const e of d.entries) {
+      let text = e.raw.join("\n").trim();
+      const tags = (text.match(/^\*\*([^*]+)\*\*/) || [, ""])[1].split(",").map(s => s.trim()).filter(Boolean);
+      text = text.replace(/^\*\*[^*]+\*\*\s*(—\s*)?/, "");
+      const [body, ...rest] = text.split("**Forks:**");
+      e.kinds = tags.filter(t => KINDS[t]); e.areas = tags.filter(t => !KINDS[t]);
+      e.body = body.trim(); e.forks = rest.join("").trim();
+      const w = (e.forks.match(/^[a-z]+/i) || [""])[0].toLowerCase();
+      e.level = LEVELS[w] ? w : "check";            // unknown wording: err on the side of looking
+      // the level word is the badge: drop it from the sentence when more follows
+      e.forksText = e.forks.replace(/^(nothing|check|port)[.:]?\s+(?=\S)/i, "") ;
+      if (/^(nothing|check|port)\.?$/i.test(e.forks)) e.forksText = "";
+    }
+    return { days, note: (parts[2] || "").trim() };
+  }
+
+  function blocks(md) {            // paragraphs and "- " lists, with wrapped continuation lines
+    const out = []; let list = null, para = [];
+    const flushP = () => { if (para.length) out.push("<p>" + inline(para.join(" ")) + "</p>"); para = []; };
+    const flushL = () => { if (list) out.push("<ul>" + list.map(i => "<li>" + inline(i) + "</li>").join("") + "</ul>"); list = null; };
+    for (const line of md.split("\n")) {
+      if (/^- /.test(line)) { flushP(); (list = list || []).push(line.slice(2)); }
+      else if (!line.trim()) { flushP(); flushL(); }
+      else if (list && /^\s+/.test(line)) list[list.length - 1] += " " + line.trim();
+      else { flushL(); para.push(line.trim()); }
+    }
+    flushP(); flushL();
+    return out.join("");
+  }
+
+  function render({ days, note }) {
+    log.innerHTML = days.map(d => `<section class="day"><h2>${esc(fmtDate(d.date))}</h2><ol>` + d.entries.map(e => `
+      <li class="entry" data-kinds="${e.kinds.join(" ")}" data-level="${e.level}">
+        <div class="tags">
+          ${e.kinds.map(k => `<span class="b b--${k}">${KINDS[k]}</span>`).join("")}
+          ${e.areas.map(a => `<span class="b b--area">${esc(a)}</span>`).join("")}
+          ${e.hash ? `<a href="${REPO}/commit/${e.hash}">${e.hash}</a>` : ""}
+        </div>
+        <h3>${inline(e.title)}</h3>
+        ${e.body ? `<div class="body">${blocks(e.body)}</div>` : ""}
+        <div class="forks is-${e.level}"><span class="lbl">For forks</span><span class="b b--${e.level}">${LEVELS[e.level]}</span><div>${e.forksText ? inline(e.forksText.replace(/\s*\n\s*/g, " ")) : ""}</div></div>
+      </li>`).join("") + `</ol></section>`).join("") +
+      `<p class="empty" id="none" hidden>Nothing matches these filters.</p>` +
+      (note ? `<p class="note">${inline(note.replace(/\s*\n\s*/g, " "))}</p>` : "");
+    apply();
+  }
+
+  let kind = "all", forksOnly = false;
+  function apply() {
+    let shown = 0; const all = log.querySelectorAll(".entry");
+    all.forEach(el => {
+      const ok = (kind === "all" || el.dataset.kinds.split(" ").includes(kind)) && (!forksOnly || el.dataset.level !== "nothing");
+      el.hidden = !ok; shown += ok;
+    });
+    log.querySelectorAll(".day").forEach(d => { d.hidden = !d.querySelector(".entry:not([hidden])"); });
+    const none = document.getElementById("none"); if (none) none.hidden = shown > 0;
+    document.getElementById("count").textContent = all.length ? `${shown} of ${all.length} entries` : "";
+  }
+  document.querySelectorAll(".seg button").forEach(b => b.addEventListener("click", () => {
+    kind = b.dataset.kind;
+    document.querySelectorAll(".seg button").forEach(o => o.setAttribute("aria-checked", String(o === b)));
+    apply();
+  }));
+  const tog = document.getElementById("forks-only");
+  tog.addEventListener("click", () => { forksOnly = !forksOnly; tog.setAttribute("aria-pressed", String(forksOnly)); apply(); });
+
+  fetch(SRC).then(r => { if (!r.ok) throw new Error(r.status); return r.text(); }).then(md => render(parse(md)))
+    .catch(() => { log.innerHTML = `<p class="empty">The changelog could not be loaded here. Read <a href="${REPO}/blob/master/CHANGELOG.md">CHANGELOG.md on GitHub</a>.</p>`; });
+})();
+</script>
+</body>
+</html>

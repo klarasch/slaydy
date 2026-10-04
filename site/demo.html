@@ -1,0 +1,447 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>slaydy</title>
+<meta name="slaydy-brief" content="occasion=landing page demo; audience=skill authors and design-system owners; minutes=5; tone=plain, confident; tier=bespoke">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter+Tight:wght@400;500;600;700&family=Inter:wght@400;500;600&family=Instrument+Serif:ital@0;1&family=JetBrains+Mono:wght@400;500;600&family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,600;12..96,800&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../runtime.css">
+<link rel="stylesheet" href="themes/slaydy.css" id="theme">
+<script data-deck>
+  /* framed on the landing page: fill the frame edge to edge, the page draws the card */
+  if (self !== top) document.documentElement.classList.add("embed");
+
+  /* live slide: each control writes a token on :root, so every slide follows */
+  document.addEventListener("DOMContentLoaded", () => {
+    const box = document.querySelector('[data-custom="playground"]');
+    if (!box) return;
+    const root = document.documentElement;
+    const fgFor = hex => {   // readable text on the picked accent
+      const [r, g, b] = [1, 3, 5].map(i => parseInt(hex.slice(i, i + 2), 16) / 255);
+      return .2126 * r + .7152 * g + .0722 * b > .5 ? "#131318" : "#fbfaf7";
+    };
+    const press = (sel, on) => box.querySelectorAll(sel).forEach(b => b.setAttribute("aria-pressed", String(b === on)));
+    box.addEventListener("click", e => {
+      const b = e.target.closest("button");
+      if (!b) return;
+      if (b.dataset.accent) {
+        root.style.setProperty("--accent", b.dataset.accent);
+        root.style.setProperty("--accent-fg", fgFor(b.dataset.accent));
+        press(".sw", b);
+      } else if (b.dataset.face) {
+        root.style.setProperty("--font-display", b.dataset.face);
+        root.dataset.liveFace = b.dataset.kind || "";
+        press(".face", b);
+      } else {
+        ["--accent", "--accent-fg", "--font-display"].forEach(t => root.style.removeProperty(t));
+        delete root.dataset.liveFace;
+        press(".sw, .face", null);
+      }
+      b.blur();   // hand the arrow keys back to the deck
+    });
+  });
+</script>
+<style data-deck>
+  html.embed { --deck-pad: 1; --slide-radius: 0px; }
+  html.embed .deck { box-shadow: none; }
+  html.embed, html.embed body { background: var(--bg); }
+
+  /* live slide: controls that rewrite the theme tokens for the whole deck */
+  [data-style="live"] { justify-content: center; }
+  [data-style="live"] .live { display: grid; grid-template-columns: 1.15fr 1fr; gap: 56px; align-items: center; }
+  [data-style="live"] .lead { max-width: 30ch; }
+  [data-custom="playground"] { margin: 34px 0 0; display: grid; gap: 22px; }
+  [data-custom="playground"] .row { display: grid; gap: 10px; }
+  [data-custom="playground"] .lbl { font: 500 12px/1 var(--font-mono); letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+  [data-custom="playground"] .opts { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+  [data-custom="playground"] button { font: inherit; color: var(--fg); cursor: pointer; background: none; border: 0; padding: 0; }
+  [data-custom="playground"] .sw { width: 44px; height: 44px; border-radius: 50%; background: var(--c); box-shadow: 0 0 0 1px var(--faint); transition: transform .15s ease; }
+  [data-custom="playground"] .sw:hover { transform: scale(1.08); }
+  [data-custom="playground"] .sw[aria-pressed="true"] { box-shadow: 0 0 0 3px var(--bg), 0 0 0 5px var(--fg); }
+  [data-custom="playground"] .face { font-size: 22px; line-height: 1; padding: 11px 16px 12px; border-radius: 99px; box-shadow: inset 0 0 0 1px var(--faint); }
+  [data-custom="playground"] .face[aria-pressed="true"] { background: var(--fg); color: var(--bg); box-shadow: none; }
+  [data-custom="playground"] .reset { font: 500 13px/1 var(--font-mono); color: var(--muted); text-decoration: underline; text-underline-offset: 3px; justify-self: start; }
+  [data-style="live"] .swatch {
+    aspect-ratio: 4 / 3; border-radius: 14px; padding: 30px 32px; display: flex; flex-direction: column; justify-content: space-between;
+    background: var(--accent); color: var(--accent-fg); transition: background .25s ease, color .25s ease;
+  }
+  [data-style="live"] .swatch p { margin: 0; font: 500 12px/1 var(--font-mono); letter-spacing: .08em; text-transform: uppercase; opacity: .8; }
+  [data-style="live"] .swatch span { font: 800 132px/.8 var(--font-display); letter-spacing: -.05em; }
+  /* Instrument Serif ships one weight: titles drop to it instead of faking bold */
+  html[data-live-face="serif"] :is(.display, .h1, .h2, .h3), html[data-live-face="serif"] [data-style="live"] .swatch span { font-weight: 400; letter-spacing: -.02em; }
+
+  /* cover: the same slide in three other brands, fanned off the right edge */
+  [data-style="cover"] .display { font-size: 80px; max-width: 15ch; }
+  [data-custom="brands"] { position: absolute; inset: 0; margin: 0; pointer-events: none; }
+  [data-custom="brands"] .mini {
+    position: absolute; width: 340px; aspect-ratio: 16 / 9; padding: 26px 28px;
+    display: flex; flex-direction: column; justify-content: flex-end; gap: 10px;
+    border-radius: 10px; background: var(--b); color: var(--f);
+    box-shadow: 0 0 0 1px color-mix(in oklab, var(--fg) 16%, transparent), 0 30px 50px -24px rgba(10, 10, 20, .45);
+  }
+  [data-custom="brands"] .mini b { font: 600 9px/1 "JetBrains Mono", monospace; letter-spacing: .12em; text-transform: uppercase; color: var(--a); }
+  [data-custom="brands"] .mini span { font-size: 34px; line-height: 1; letter-spacing: -.03em; }
+  [data-custom="brands"] .mini em { font-style: inherit; color: var(--a); }
+  [data-custom="brands"] .mini i { display: block; height: 5px; width: 62%; border-radius: 3px; background: currentColor; opacity: .16; box-shadow: 0 11px 0 currentColor; margin-bottom: 11px; }
+  [data-custom="brands"] .m1 { top: 30px;  right: -44px; rotate: 7deg;  --b: #ffffff; --f: #1b2b4b; --a: #0a66ff; }
+  [data-custom="brands"] .m2 { top: 212px; right: 36px;  rotate: -6deg; --b: #0b0b0f; --f: #f6f5f3; --a: #ff5b2e; }
+  [data-custom="brands"] .m3 { top: 404px; right: -64px; rotate: 5deg;  --b: #071612; --f: #eefaf4; --a: #3ddc97; }
+  [data-custom="brands"] .m1 span { font-family: "Inter Tight", sans-serif; font-weight: 700; }
+  [data-custom="brands"] .m2 span { font-family: "Instrument Serif", serif; font-weight: 400; font-size: 40px; letter-spacing: -.015em; }
+  [data-custom="brands"] .m3 span { font-family: "JetBrains Mono", monospace; font-weight: 600; font-size: 27px; letter-spacing: -.04em; }
+
+  /* the stock theme has no section override: orange emphasis on an orange divider vanishes */
+  .slide--section .display strong { color: inherit; }
+</style>
+</head>
+<body data-deck-label="slaydy" data-themes="slaydy midnight">
+  <!-- icons this deck uses, embedded from ../icons/ (LAYOUTS.md "Icons") -->
+  <svg width="0" height="0" style="position:absolute" aria-hidden="true">
+    <symbol id="i-check" viewBox="0 0 24 24"><path d="M5 12l5 5L20 7"/></symbol>
+    <symbol id="i-x" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></symbol>
+    <symbol id="i-message-circle" viewBox="0 0 24 24"><path d="M7.9 20A9 9 0 1 0 4 16.1L2 22z"/></symbol>
+    <symbol id="i-refresh" viewBox="0 0 24 24"><path d="M20 8A8 8 0 0 0 5.5 6.5L4 8"/><path d="M4 4v4h4"/><path d="M4 16a8 8 0 0 0 14.5 1.5L20 16"/><path d="M20 20v-4h-4"/></symbol>
+    <symbol id="i-eye" viewBox="0 0 24 24"><path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12z"/><circle cx="12" cy="12" r="3"/></symbol>
+    <symbol id="i-file-text" viewBox="0 0 24 24"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5M9 13h6M9 17h4"/></symbol>
+    <symbol id="i-box" viewBox="0 0 24 24"><path d="M21 8l-9-5-9 5v8l9 5 9-5z"/><path d="M3 8l9 5 9-5M12 13v8"/></symbol>
+    <symbol id="i-layers" viewBox="0 0 24 24"><path d="M12 3l9 5-9 5-9-5z"/><path d="M3 12.5l9 5 9-5"/><path d="M3 17l9 5 9-5"/></symbol>
+    <symbol id="i-zap" viewBox="0 0 24 24"><path d="M13 2L4 14h6l-1 8 9-12h-6l1-8z"/></symbol>
+    <symbol id="i-sparkles" viewBox="0 0 24 24"><path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z"/><path d="M19 16l.7 2 2 .7-2 .7-.7 2-.7-2-2-.7 2-.7z"/></symbol>
+  </svg>
+<div class="stage">
+<div class="deck">
+
+  <!-- 01 title -->
+  <section class="slide slide--title" data-bare data-style="cover" data-title="Cover">
+    <figure data-custom="brands" aria-hidden="true">
+      <div class="mini m1"><b>Acme</b><span>Q3 business <em>review</em></span><i></i></div>
+      <div class="mini m2"><b>Nocturne</b><span>The <em>launch</em> plan</span><i></i></div>
+      <div class="mini m3"><b>Fernworks</b><span>roadmap <em>2027</em></span><i></i></div>
+    </figure>
+    <p class="eyebrow"><b>slaydy</b> A deck skill for Claude</p>
+    <h1 class="display">Make your brand’s deck skill. <strong>Don’t rebuild the runtime.</strong></h1>
+    <div class="meta">
+      <span>This is a real deck</span>
+      <span><b>→</b> to advance</span>
+      <span><b>T</b> switches the brand</span>
+    </div>
+    <aside class="notes">
+      <p>Say up front that the deck on screen is the product. It is one HTML file Claude wrote, and everything you are about to see is editable. Invite them to press T at the end of the first minute, not now.</p>
+    </aside>
+  </section>
+
+  <!-- 02 statement -->
+  <section class="slide slide--statement" data-title="The problem">
+    <p class="eyebrow">The problem</p>
+    <h2 class="display">A generated deck nobody can touch is <strong>dead on arrival.</strong></h2>
+    <p class="lead">Slides you can't fix in place get thrown away and regenerated.</p>
+    <aside class="notes">
+      <p>Everyone in the room has been handed a one-shot deck with a typo on slide four. Pause on that. The rest of the talk is about what happens when the file stays editable.</p>
+    </aside>
+  </section>
+
+  <!-- 03 compare -->
+  <section class="slide slide--compare" data-title="Today versus slaydy">
+    <div class="stack stack--sm">
+      <p class="eyebrow">The difference</p>
+      <h2 class="h1">Editable beats <strong>regenerated.</strong></h2>
+    </div>
+    <div class="compare">
+      <article class="col">
+        <svg class="glyph"><use href="#i-x"/></svg>
+        <h3 class="h3">Generated slides today</h3>
+        <ul>
+          <li>A picture of slides, or a one-shot file.</li>
+          <li>Every fix means regenerating the deck.</li>
+          <li>Your hand edits get thrown away.</li>
+          <li>The brand drifts from deck to deck.</li>
+        </ul>
+      </article>
+      <article class="col col--accent">
+        <svg class="glyph"><use href="#i-check"/></svg>
+        <h3 class="h3">With slaydy</h3>
+        <ul>
+          <li>One HTML file that opens anywhere.</li>
+          <li>Fix it by hand, right in the browser.</li>
+          <li>Claude revises the same file in place.</li>
+          <li>The brand lives in one theme file.</li>
+        </ul>
+      </article>
+    </div>
+    <aside class="notes">
+      <p>Left is the experience people already know. Right is the same deck with the loop closed: you edit, Claude edits, nobody starts over. Keep the brand line for later, the demo makes it better than words.</p>
+    </aside>
+  </section>
+
+  <!-- 04 bullets -->
+  <section class="slide slide--bullets" data-title="Edit mode">
+    <div class="stack stack--sm">
+      <p class="eyebrow">Edit mode</p>
+      <h2 class="h1">Press <strong>E</strong> and fix it yourself.</h2>
+    </div>
+    <ul>
+      <li>Click any text and rewrite it. Try it on this headline.</li>
+      <li>Paste an image, drag it into place, resize it from the corners.</li>
+      <li>Add, duplicate and reorder slides.</li>
+      <li>⌘Z undoes all of it, slide operations included.</li>
+      <li>Save back into the deck's own folder, and it autosaves.</li>
+    </ul>
+    <aside class="notes">
+      <p>Stop talking and press E. Rewrite the headline live, then undo it with ⌘Z so they see nothing is risky. Saving writes into the deck's folder, which is what Claude reads on the next pass.</p>
+    </aside>
+  </section>
+
+  <!-- 05 cards -->
+  <section class="slide slide--cards" data-title="Ask Claude">
+    <div class="stack stack--sm">
+      <p class="eyebrow">Revise with Claude</p>
+      <h2 class="h1">Or <strong>ask Claude.</strong></h2>
+    </div>
+    <div class="cards" data-reveal>
+      <article class="card">
+        <svg class="glyph"><use href="#i-message-circle"/></svg>
+        <h3 class="h3">Leave a note</h3>
+        <p class="body">Use Request change in edit mode. The note stays on the slide until Claude reads it.</p>
+      </article>
+      <article class="card">
+        <svg class="glyph"><use href="#i-sparkles"/></svg>
+        <h3 class="h3">Say what to do</h3>
+        <p class="body">Tell Claude to apply your notes. It finds every note in the deck and works through them.</p>
+      </article>
+      <article class="card">
+        <svg class="glyph"><use href="#i-refresh"/></svg>
+        <h3 class="h3">Edited in place</h3>
+        <p class="body">Claude edits the same file, so the fixes you made by hand stay fixed.</p>
+      </article>
+    </div>
+    <aside class="notes">
+      <p>Step through the three cards one keypress at a time. The point of the last card is trust: Claude never regenerates a deck that carries hand edits.</p>
+    </aside>
+  </section>
+
+  <!-- 06 section -->
+  <section class="slide slide--section" data-bare data-transition="wipe" data-title="Press T">
+    <p class="index">01</p>
+    <p class="eyebrow">Same deck, another brand</p>
+    <h2 class="display">Now press <strong>T.</strong></h2>
+    <aside class="notes">
+      <p>This is the pivot. Press T and let the room watch the type, the colour and the emphasis change while the words stay put. Press it again to come back. Say nothing for a few seconds.</p>
+    </aside>
+  </section>
+
+  <!-- 07 code -->
+  <section class="slide slide--code" data-title="A brand starts at nine tokens">
+    <div class="stack stack--sm">
+      <p class="eyebrow">The theme file</p>
+      <h2 class="h1">A brand starts at <strong>nine tokens.</strong></h2>
+    </div>
+    <pre data-lang="css" data-label="themes/slaydy.css">:root {
+  --app-bg: #e9e6df;
+  --bg: #fbfaf7;
+  --fg: #131318;
+  --muted: rgba(19, 19, 24, .6);
+  --faint: rgba(19, 19, 24, .14);
+  --surface: #f2efe8;
+  --accent: #3a2fd6;
+  --accent-2: #d93a1f;
+  --accent-fg: #fbfaf7;
+}</pre>
+    <aside class="notes">
+      <p>This is the file that was just on screen. Colours are tokens, and fonts and the emphasis style sit below them in a few commented lines. Midnight, the other theme in the switcher, is the stock one with nothing added.</p>
+    </aside>
+  </section>
+
+  <!-- live: a slide a .pptx cannot be -->
+  <section class="slide slide--blank" data-style="live" data-title="Live slide">
+    <div class="live">
+      <div>
+        <div class="stack stack--sm">
+          <p class="eyebrow">This slide is live</p>
+          <h2 class="h1">Go on, <strong>change them.</strong></h2>
+        </div>
+        <figure data-custom="playground">
+          <div class="row">
+            <span class="lbl">Accent</span>
+            <div class="opts">
+              <button type="button" class="sw" style="--c:#3a2fd6" data-accent="#3a2fd6" aria-label="Indigo" aria-pressed="false"></button>
+              <button type="button" class="sw" style="--c:#ff5b2e" data-accent="#ff5b2e" aria-label="Orange" aria-pressed="false"></button>
+              <button type="button" class="sw" style="--c:#0f9d6b" data-accent="#0f9d6b" aria-label="Green" aria-pressed="false"></button>
+              <button type="button" class="sw" style="--c:#e0338a" data-accent="#e0338a" aria-label="Pink" aria-pressed="false"></button>
+              <button type="button" class="sw" style="--c:#f5b700" data-accent="#f5b700" aria-label="Yellow" aria-pressed="false"></button>
+            </div>
+          </div>
+          <div class="row">
+            <span class="lbl">Headline face</span>
+            <div class="opts">
+              <button type="button" class="face" style="font-family:'Bricolage Grotesque',sans-serif;font-weight:800" data-face='"Bricolage Grotesque", sans-serif' aria-pressed="false">Grotesk</button>
+              <button type="button" class="face" style="font-family:'Inter Tight',sans-serif;font-weight:600" data-face='"Inter Tight", sans-serif' aria-pressed="false">Neutral</button>
+              <button type="button" class="face" style="font-family:'Instrument Serif',serif" data-face='"Instrument Serif", serif' data-kind="serif" aria-pressed="false">Serif</button>
+            </div>
+          </div>
+          <button type="button" class="reset">Reset to the theme</button>
+        </figure>
+      </div>
+      <div class="swatch" aria-hidden="true">
+        <p>Every slide follows</p>
+        <span>Aa</span>
+      </div>
+    </div>
+    <aside class="notes">
+      <p>This is the part a .pptx cannot do. A deck is a web page, so a slide can hold working controls. Each button writes a theme token, and every slide in the deck follows. Pick a colour and a face, then flip back through what you have already seen.</p>
+    </aside>
+  </section>
+
+  <!-- beyond tokens -->
+  <section class="slide slide--bullets" data-title="Beyond tokens">
+    <div class="stack stack--sm">
+      <p class="eyebrow">When tokens are not enough</p>
+      <h2 class="h1">Tokens are the floor, <strong>not the ceiling.</strong></h2>
+    </div>
+    <ul>
+      <li>Tokens set colours, typefaces, radius and the wash. Most brands stop here.</li>
+      <li>A theme is a full stylesheet. This deck’s serif emphasis is six lines of it.</li>
+      <li>Add your own layouts, and Claude generates and revises them like the stock ones.</li>
+      <li>Scripts hook into the runtime for graphics and behaviour, like the last slide.</li>
+      <li>A voice file tells Claude how the brand writes and what it never uses.</li>
+    </ul>
+    <aside class="notes">
+      <p>Answer the worry that a token theme means a plain deck. The layers are tokens, theme CSS, custom layouts, custom scripts and the voice file. All of them live in the fork, and no runtime update touches them.</p>
+    </aside>
+  </section>
+
+  <!-- 08 timeline -->
+  <section class="slide slide--timeline" data-title="Brand setup">
+    <div class="stack stack--sm">
+      <p class="eyebrow">Brand setup</p>
+      <h2 class="h1">Your brand is <strong>one prompt.</strong></h2>
+    </div>
+    <div class="timeline">
+      <div class="step">
+        <p class="caption">Ask</p>
+        <h3 class="h3">One sentence</h3>
+        <p class="body">Set up slaydy for Acme from acme.com.</p>
+      </div>
+      <div class="step">
+        <p class="caption">Review</p>
+        <h3 class="h3">Check the draft</h3>
+        <p class="body">Colours, type and voice come back first.</p>
+      </div>
+      <div class="step">
+        <p class="caption">Install</p>
+        <h3 class="h3">Claude builds it</h3>
+        <p class="body">It builds acme-decks and installs it.</p>
+      </div>
+      <div class="step">
+        <p class="caption">Use</p>
+        <h3 class="h3">Ask for a deck</h3>
+        <p class="body">Make me a deck. It comes out in Acme.</p>
+      </div>
+    </div>
+    <aside class="notes">
+      <p>The input can be a website, a brand PDF or a logo. Stress the review step: nothing is written until the tokens and voice rules have been shown and approved. The install itself waits for a yes.</p>
+    </aside>
+  </section>
+
+  <!-- 09 stats -->
+  <section class="slide slide--stats" data-transition="zoom" data-title="Small on purpose">
+    <div class="stack stack--sm">
+      <p class="eyebrow">The footprint</p>
+      <h2 class="h1">A small core <strong>you can extend.</strong></h2>
+    </div>
+    <div class="stats">
+      <div class="stat">
+        <p class="stat__num" data-animate="count">22</p>
+        <p class="body">layouts in the contract, plus any you add.</p>
+      </div>
+      <div class="stat">
+        <p class="stat__num" data-animate="count">9</p>
+        <p class="body">tokens to start a brand.</p>
+      </div>
+      <div class="stat">
+        <p class="stat__num" data-animate="count">1</p>
+        <p class="body">HTML file per deck.</p>
+      </div>
+    </div>
+    <aside class="notes">
+      <p>The contract is small enough for Claude to follow exactly, which is why the output is predictable. Claude only writes slide markup. It never writes CSS or JS, so a runtime update cannot break an existing deck.</p>
+    </aside>
+  </section>
+
+  <!-- 10 bento -->
+  <section class="slide slide--bento" data-title="Output">
+    <div class="stack stack--sm">
+      <p class="eyebrow">Output</p>
+      <h2 class="h1">Out <strong>the door.</strong></h2>
+    </div>
+    <div class="bento">
+      <article class="cell cell--wide">
+        <svg class="glyph"><use href="#i-eye"/></svg>
+        <h3 class="h3">S presenter view</h3>
+        <p class="body">Your speaker notes, the next slide and a clock, in a second window.</p>
+      </article>
+      <article class="cell">
+        <svg class="glyph"><use href="#i-file-text"/></svg>
+        <h3 class="h3">P PDF</h3>
+        <p class="body">Real, selectable text.</p>
+      </article>
+      <article class="cell">
+        <svg class="glyph"><use href="#i-box"/></svg>
+        <h3 class="h3">D one file</h3>
+        <p class="body">Self-contained, to send as is.</p>
+      </article>
+      <article class="cell">
+        <svg class="glyph"><use href="#i-zap"/></svg>
+        <h3 class="h3">C PNG</h3>
+        <p class="body">Copy the current slide as an image.</p>
+      </article>
+      <article class="cell cell--accent">
+        <svg class="glyph"><use href="#i-layers"/></svg>
+        <h3 class="h3">O overview</h3>
+        <p class="body">Every slide at a glance.</p>
+      </article>
+    </div>
+    <aside class="notes">
+      <p>Each tile is a single key. Press S, then C, while you talk. The one-file export is what you attach to an email, and the PDF keeps text selectable instead of flattening it to pictures.</p>
+    </aside>
+  </section>
+
+  <!-- 11 table -->
+  <section class="slide slide--table" data-title="Updates">
+    <div class="stack stack--sm">
+      <p class="eyebrow">Staying current</p>
+      <h2 class="h1">Updates are <strong>one prompt,</strong> never a merge.</h2>
+    </div>
+    <table data-key="3">
+      <thead><tr><th>File</th><th>slaydy maintains</th><th>You maintain</th></tr></thead>
+      <tbody>
+        <tr><td>Engine</td><td>runtime.js, runtime.css</td><td>—</td></tr>
+        <tr><td>Instructions</td><td>SKILL.md, LAYOUTS.md</td><td>SKILL.fork.md</td></tr>
+        <tr><td>Brand</td><td>—</td><td>themes/acme.css</td></tr>
+        <tr><td>Voice</td><td>—</td><td>themes/acme.md</td></tr>
+        <tr><td>Assets</td><td>—</td><td>Fonts and images</td></tr>
+        <tr><td>On update</td><td>Replaced every time</td><td>Never touched</td></tr>
+      </tbody>
+    </table>
+    <aside class="notes">
+      <p>Every file is wholly slaydy's or wholly yours, so an update is a copy and never a merge. A script shows what changed since your last update and skips anything you edited. That is the answer to the question about keeping a brand through upgrades.</p>
+    </aside>
+  </section>
+
+  <!-- 12 end -->
+  <section class="slide slide--end" data-bare data-title="Get started">
+    <p class="eyebrow">Get started</p>
+    <h2 class="display">Put your brand on it <strong>by Friday.</strong></h2>
+    <p class="lead">github.com/klarasch/slaydy</p>
+    <aside class="notes">
+      <p>Close on the ask: one prompt to train a brand. Leave the address on screen and take questions with the deck still open, so anyone can press E and poke at it.</p>
+    </aside>
+  </section>
+
+</div>
+</div>
+<script src="../runtime.js"></script>
+</body>
+</html>
