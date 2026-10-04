@@ -271,6 +271,14 @@ saves as plain text inside the `<pre>`, and edit mode drops back to plain text w
 
 ### `slide--end` — centred closing card.
 
+### `slide--blank` — an empty slide
+A section with no content, only the footer. A surface for the user's own text boxes, pasted
+images and SVG. Don't generate it; the user adds it from the add-slide picker. Add `data-bare` to
+hide the footer too.
+```html
+<section class="slide slide--blank" data-title="Blank"></section>
+```
+
 ### `slide--placeholder` — a slide to be written on a later pass
 A section carrying only `data-note` and this class. The runtime renders it as a dashed
 outline showing the note text. On the next revise pass, replace it with a real slide.
@@ -472,7 +480,8 @@ they are, like pasted images.
 The paragraph wears one of the deck's own type classes — `display`, `h1`, `h2`, `h3`, `lead`,
 `body`, `caption`, `eyebrow` — so a box follows the theme and has no font, size or colour of its
 own. `style` carries position and width, plus `rotate` once the user has turned it (stickers
-of either kind can be rotated). `data-align` is `center` or `right`; absent means left. Don't
+of either kind can be rotated). `data-shadow="off"` on any sticker drops its shadow; pasted SVG
+stickers start with it off. `data-align` is `center` or `right`; absent means left. Don't
 write these when generating a deck; use a layout. To change a box's words in a revision, edit
 the `<p>`.
 

@@ -1409,6 +1409,16 @@ body.is-overview .overview { display: block; }
   box-shadow: 0 0 0 2px var(--accent), 0 14px 34px -14px rgba(0, 0, 0, .7);
 }
 .thumb__check { display: none; }
+.thumb__scaler { pointer-events: none; }
+body.is-editing .thumb { cursor: grab; }
+.thumb { position: relative; }
+.thumb.is-dragging { opacity: .35; }
+.thumb.is-drop-before::before, .thumb.is-drop-after::before {
+  content: ""; position: absolute; top: -6px; bottom: 26px; width: 4px; border-radius: 2px;
+  background: var(--accent); z-index: 4; pointer-events: none;
+}
+.thumb.is-drop-before::before { left: -15px; }
+.thumb.is-drop-after::before { right: -15px; }
 .ov-btn {
   font: 500 12px/1 var(--font-body, system-ui); letter-spacing: .02em; color: rgba(255,255,255,.85);
   background: rgba(255,255,255,.08); border: 1px solid rgba(255,255,255,.18);
@@ -1536,6 +1546,8 @@ body.is-editing .sticker--text > p:empty::before { content: "Type something"; op
   box-shadow: 0 14px 34px -12px rgba(0,0,0,.7);
 }
 .tbx-bar.is-shown { display: flex; }
+.tbx-bar[data-kind="image"] [data-for="text"], .tbx-bar[data-kind="text"] [data-for="image"] { display: none; }
+.sticker[data-shadow="off"] { box-shadow: none; }
 .tbx-bar button {
   min-width: 30px; height: 30px; padding: 0 6px; border: 0; border-radius: 7px; cursor: pointer;
   display: inline-grid; place-items: center;

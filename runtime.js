@@ -449,6 +449,71 @@
     $("#ov-count").textContent = ovJumpBuf ? `go to ${ovJumpBuf}…` : `${slides.length} slides`;
   }
 
+  /* drag to reorder. Dragging a picked slide (select mode) carries every picked
+     slide with it, in deck order; dropping on the left or right half of a
+     thumbnail inserts before or after it. */
+  let ovDrag = null;                 // { group: [slide elements] }
+  function ovClearDrop() { $$(".is-drop-before, .is-drop-after", $("#ov-grid")).forEach(t => t.classList.remove("is-drop-before", "is-drop-after")); }
+  function ovDropSide(t, e) {
+    const r = t.getBoundingClientRect();
+    return e.clientX < r.left + r.width / 2 ? "before" : "after";
+  }
+  function ovWireDrag(t, i) {
+    t.draggable = editing;
+    if (!editing) return;
+    t.addEventListener("dragstart", e => {
+      const s = slides[i];
+      const group = ovPicking && ovPicked.has(s) && ovPicked.size > 1 ? slides.filter(x => ovPicked.has(x)) : [s];
+      ovDrag = { group };
+      e.dataTransfer.effectAllowed = "move";
+      e.dataTransfer.setData("text/plain", "slide");
+      t.classList.add("is-dragging");
+      if (group.length > 1) {
+        ovThumbs().forEach((o, j) => o.classList.toggle("is-dragging", group.includes(slides[j])));
+      }
+    });
+    t.addEventListener("dragend", () => {
+      ovDrag = null; ovClearDrop();
+      ovThumbs().forEach(o => o.classList.remove("is-dragging"));
+    });
+    t.addEventListener("dragover", e => {
+      if (!ovDrag) return;
+      e.preventDefault();
+      e.dataTransfer.dropEffect = "move";
+      const side = ovDropSide(t, e);
+      ovClearDrop();
+      t.classList.add("is-drop-" + side);
+    });
+    t.addEventListener("drop", e => {
+      if (!ovDrag) return;
+      e.preventDefault();
+      const side = ovDropSide(t, e), group = ovDrag.group;
+      ovDrag = null; ovClearDrop();
+      ovMoveGroup(group, i + (side === "after" ? 1 : 0));
+    });
+  }
+  // move `group` so it lands where insertion point `p` (0..n, in the current
+  // order) is; slides of the group that sit at the point just stay put
+  function ovMoveGroup(group, p) {
+    const rest = slides.filter(x => !group.includes(x));
+    const before = slides.slice(0, p).filter(x => !group.includes(x)).length;   // non-group slides ahead of the point
+    if ([...rest.slice(0, before), ...group, ...rest.slice(before)].every((x, k) => x === slides[k])) return;
+    snapshot();
+    const cur = slides[index];
+    const ref = rest[before] || null;                  // first slide that stays behind the group
+    const anchor = ref || rest[rest.length - 1];
+    if (!anchor) return;
+    ref ? group.forEach(g => ref.before(g)) : group.slice().reverse().forEach(g => anchor.after(g));
+    decorate();
+    index = slides.indexOf(cur);
+    updateCount();
+    replaceHash("#" + (index + 1));
+    ovSelected = slides.indexOf(group[0]);
+    buildOverview();
+    requestAnimationFrame(() => ovThumbs()[ovSelected]?.scrollIntoView({ block: "nearest" }));
+    syncState();
+  }
+
   function ovMoveSlide(from, to) {
     if (to === from || to < 0 || to >= slides.length) return;
     snapshot();
@@ -497,9 +562,9 @@
     ovCols = 0;
     ovSelected = Math.min(ovSelected, slides.length - 1);
     $("#ov-hint").innerHTML = editing
-      ? `<kbd>↑↓←→</kbd> select · <kbd>${KEY.alt}arrows</kbd> reorder · <kbd>Enter</kbd> open`
+      ? `<kbd>↑↓←→</kbd> select · drag or <kbd>${KEY.alt}arrows</kbd> reorder · <kbd>Enter</kbd> open`
       : `<kbd>↑↓←→</kbd> select · <kbd>Enter</kbd> open · type a number to jump`;
-    if (ovPicking) $("#ov-hint").innerHTML = `<kbd>Space</kbd> pick · <kbd>↑↓←→</kbd> move · <kbd>S</kbd> done picking`;
+    if (ovPicking) $("#ov-hint").innerHTML = `<kbd>Space</kbd> pick · <kbd>↑↓←→</kbd> move · <kbd>S</kbd> done picking` + (editing ? " · drag to move" : "");
     [...ovPicked].forEach(s => { if (!slides.includes(s)) ovPicked.delete(s); });
     slides.forEach((s, i) => {
       const t = document.createElement("div");
@@ -513,8 +578,10 @@
       // the detached clone never gets the timer that clears them
       clone.classList.remove("is-entering", "is-leaving");
       clone.classList.add("is-active");
+      clone.querySelectorAll(".is-sel").forEach(n => n.classList.remove("is-sel"));   // a selected sticker's outline isn't part of the slide
       $(".thumb__scaler", t).append(clone);
       $(".thumb__label b", t).textContent = slideTitle(s);
+      ovWireDrag(t, i);
       t.onclick = () => {
         if (ovPicking) { ovSelect(i); pickSlide(i); return; }
         toggleOverview(false); show(i);
@@ -651,6 +718,29 @@
     updateCropChip(m);
   }
 
+  /* SVG on the clipboard arrives as text (Figma's "Copy as SVG", an editor, a
+     code block), not as a file. Treat it as an image — unless the caret is in
+     text, where pasting markup is just pasting text. Returns clean markup or "". */
+  function clipboardSvg(cb) {
+    if (!cb || document.activeElement?.isContentEditable || /^(INPUT|TEXTAREA)$/.test(document.activeElement?.tagName)) return "";
+    const raw = (cb.getData("image/svg+xml") || cb.getData("text/plain") || "").trim();
+    if (!/^(<\?xml[^>]*>\s*)?(<!--[\s\S]*?-->\s*)*(<!doctype[^>]*>\s*)?<svg[\s>]/i.test(raw)) return "";
+    const src = /<svg[^>]*\sxmlns\s*=/i.test(raw) ? raw : raw.replace(/<svg/i, '<svg xmlns="http://www.w3.org/2000/svg"');
+    const doc = new DOMParser().parseFromString(src, "image/svg+xml");
+    const svg = doc.documentElement;
+    if (doc.querySelector("parsererror") || svg.localName !== "svg") return "";
+    // markup from the clipboard is untrusted: no script, no foreign content, no handlers
+    doc.querySelectorAll("script, foreignObject").forEach(n => n.remove());
+    doc.querySelectorAll("*").forEach(n => [...n.attributes].forEach(a => {
+      if (/^on/i.test(a.name) || (/href$/i.test(a.name) && /^\s*javascript:/i.test(a.value))) n.removeAttribute(a.name);
+    }));
+    // an <img> scales an SVG by its viewBox; fixed size without one would crop
+    const num = v => /^\s*[\d.]+(px)?\s*$/.test(v || "") ? parseFloat(v) : 0;
+    if (!svg.getAttribute("viewBox") && num(svg.getAttribute("width")) && num(svg.getAttribute("height")))
+      svg.setAttribute("viewBox", `0 0 ${num(svg.getAttribute("width"))} ${num(svg.getAttribute("height"))}`);
+    return new XMLSerializer().serializeToString(doc);
+  }
+
   function addSticker(file) {
     snapshot();
     const rel = fileName(file);
@@ -658,6 +748,7 @@
     const wrap = document.createElement("div");
     wrap.className = "sticker";
     wrap.style.cssText = "left:40%;top:32%;width:34%";
+    if (file.type === "image/svg+xml") wrap.dataset.shadow = "off";   // a drop shadow on a transparent vector is the box's, not the shape's
     const img = document.createElement("img");
     img.src = URL.createObjectURL(file);
     img.dataset.src = rel;
@@ -713,10 +804,12 @@
   function syncTbxBar() {
     const bar = $("#tbx-bar");
     if (!bar) return;
-    const b = selectedSticker?.classList.contains("sticker--text") && editing ? selectedSticker : null;
+    const b = editing ? selectedSticker : null;
     bar.classList.toggle("is-shown", !!b);
     if (!b) return;
-    $("select", bar).value = tbxStyle(b);
+    bar.dataset.kind = b.classList.contains("sticker--text") ? "text" : "image";
+    $("[data-a='shadow']", bar).classList.toggle("is-on", b.dataset.shadow !== "off");
+    if (bar.dataset.kind === "text") $("select", bar).value = tbxStyle(b);
     $$("[data-a^='align']", bar).forEach(el =>
       el.classList.toggle("is-on", (b.dataset.align || "left") === el.dataset.a.split(":")[1]));
     placeTbxBar();
@@ -742,11 +835,12 @@
   }
   function onTbxBar(e) {
     const el = e.target.closest("[data-a]"), b = selectedSticker;
-    if (!el || !b?.classList.contains("sticker--text")) return;
+    if (!el || !b) return;
     const [a, v] = el.dataset.a.split(":");
     snapshot();
     const set = (k, val, dflt) => val === dflt ? delete b.dataset[k] : b.dataset[k] = val;
     if (a === "align") set("align", v, "left");
+    else if (a === "shadow") set("shadow", b.dataset.shadow === "off" ? "" : "off", "");
     else if (a === "delete") { b.remove(); selectSticker(null); return; }
     syncTbxBar();
   }
@@ -1522,6 +1616,7 @@
 
   /* ------------------------------------------------------------ slide ops */
   const LAYOUTS = [
+    { key: "blank", label: "Blank", html: () => `<section class="slide slide--blank" data-title="Blank"></section>` },
     { key: "title", label: "Title", html: () => `<section class="slide slide--title" data-bare data-title="Title"><p class="eyebrow">Kicker</p><h1 class="display">Headline goes here</h1><div class="meta"><span>Author</span><span>Date</span></div></section>` },
     { key: "section", label: "Section", html: () => `<section class="slide slide--section" data-bare data-title="Section"><p class="index">01</p><p class="eyebrow">Section</p><h2 class="display">Name</h2></section>` },
     { key: "statement", label: "Statement", html: () => `<section class="slide slide--statement" data-title="Statement"><p class="eyebrow">Kicker</p><h2 class="display">Headline goes here</h2><p class="lead">One sentence of support.</p></section>` },
@@ -1992,11 +2087,12 @@
       <div class="toolbar" id="toolbar" data-runtime></div>
       <div class="tip" id="tip" data-runtime style="display:none"></div>
       <div class="tbx-bar" id="tbx-bar" data-runtime>
-        <select data-tip="Text style" aria-label="Text style">${TBX_STYLES.map(([c, l]) => `<option value="${c}">${l}</option>`).join("")}</select>
-        <i></i>
-        <button data-a="align:left" data-tip="Align left" aria-label="Align left"><svg viewBox="0 0 16 16"><path d="M2 3h12M2 7h8M2 11h12M2 15h8"/></svg></button>
-        <button data-a="align:center" data-tip="Center" aria-label="Center"><svg viewBox="0 0 16 16"><path d="M2 3h12M4 7h8M2 11h12M4 15h8"/></svg></button>
-        <button data-a="align:right" data-tip="Align right" aria-label="Align right"><svg viewBox="0 0 16 16"><path d="M2 3h12M6 7h8M2 11h12M6 15h8"/></svg></button>
+        <select data-for="text" data-tip="Text style" aria-label="Text style">${TBX_STYLES.map(([c, l]) => `<option value="${c}">${l}</option>`).join("")}</select>
+ <i data-for="text"></i>
+        <button data-for="text" data-a="align:left" data-tip="Align left" aria-label="Align left"><svg viewBox="0 0 16 16"><path d="M2 3h12M2 7h8M2 11h12M2 15h8"/></svg></button>
+        <button data-for="text" data-a="align:center" data-tip="Center" aria-label="Center"><svg viewBox="0 0 16 16"><path d="M2 3h12M4 7h8M2 11h12M4 15h8"/></svg></button>
+        <button data-for="text" data-a="align:right" data-tip="Align right" aria-label="Align right"><svg viewBox="0 0 16 16"><path d="M2 3h12M6 7h8M2 11h12M6 15h8"/></svg></button>
+        <button data-for="image" data-a="shadow" data-tip="Drop shadow on or off" aria-label="Drop shadow"><svg viewBox="0 0 16 16"><rect x="2.5" y="2.5" width="8" height="8" rx="1.5"/><path d="M5 13.5h8.5V5"/></svg></button>
         <i></i>
         <button data-a="delete" data-tip="Delete text box" aria-label="Delete text box"><svg viewBox="0 0 24 24"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/></svg></button>
       </div>
@@ -2336,6 +2432,7 @@
   /* ---------------------------------------------------------- add-slide picker */
   function tileWireframe(key) {
     const WF = {
+      blank: ``,
       title: `<i style="left:10%;top:30%;width:55%;height:9%"></i><i style="left:10%;top:44%;width:40%;height:9%"></i><i class="a" style="left:10%;top:20%;width:14%;height:4%"></i>`,
       section: `<i style="left:10%;top:45%;width:45%;height:12%;background:var(--bg)"></i>`,
       statement: `<i style="left:10%;top:28%;width:70%;height:11%"></i><i style="left:10%;top:44%;width:50%;height:11%"></i>`,
@@ -2800,7 +2897,15 @@
     // paste an image anywhere in edit mode
     addEventListener("paste", e => {
       if (!editing) return;
-      const item = [...(e.clipboardData?.items || [])].find(i => i.type.startsWith("image/"));
+      const svg = clipboardSvg(e.clipboardData);
+      if (svg) {
+        e.preventDefault();
+        const file = new File([svg], "pasted.svg", { type: "image/svg+xml" });
+        const slot = document.activeElement?.closest?.(".media") || null;
+        slot ? attachImage(file, slot) : addSticker(file);
+        return;
+      }
+      const item = [...(e.clipboardData?.items || [])].find(i => i.kind === "file" && i.type.startsWith("image/"));
       if (!item) return;
       e.preventDefault();
       const file = item.getAsFile();
