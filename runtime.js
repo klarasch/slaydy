@@ -811,6 +811,8 @@
     if (!b) return hideTip();
     bar.dataset.kind = b.classList.contains("sticker--text") ? "text" : "image";
     $("[data-a='shadow']", bar).classList.toggle("is-on", b.dataset.shadow !== "off");
+    const del = $("[data-a='delete']", bar), what = bar.dataset.kind === "text" ? "text box" : "image";
+    del.dataset.tip = `Delete ${what}`; del.setAttribute("aria-label", `Delete ${what}`);
     if (bar.dataset.kind === "text") $("select", bar).value = tbxStyle(b);
     $$("[data-a^='align']", bar).forEach(el =>
       el.classList.toggle("is-on", (b.dataset.align || "left") === el.dataset.a.split(":")[1]));
