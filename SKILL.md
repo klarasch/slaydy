@@ -207,6 +207,10 @@ python3 <this skill's folder>/standalone.py <deck folder>/deck.html
 It writes one self-contained file beside the deck, **named after the deck's `<title>`**
 (e.g. `Q3 Platform Review.html`) — runtime, theme, images baked in; markup on top, compacted
 runtime at the end — that the user can send as is.
+**It also lints the deck and prints what it found.** Every `fix` line is a rule of this file
+broken on a named slide: fix it in `deck.html` and run the script again, until it prints no
+`fix` lines. Read each `check` line and act on it unless the slide has a reason not to. Never
+hand over a deck with `fix` lines open.
 **This is the deliverable, on every surface** — the only file you hand the user. The folder
 deck (`deck.html` + assets) is your workspace: it keeps revisions cheap (no base64 in context),
 diffs small, and picks up runtime fixes — but the user never needs to open it, and opened via
@@ -296,7 +300,8 @@ markup into `deck.html`, then revise as usual.
 7. Never touch `src` attributes on `<img>`, and never remove `.sticker` elements — those are the
    user's pasted images and text boxes (`sticker--text`, LAYOUTS.md).
 8. Re-check the density budget on any slide you rewrote.
-9. Rebuild the share file (`standalone.py`, §3) — a stale share file is worse than none.
+9. Rebuild the share file (`standalone.py`, §3) — a stale share file is worse than none. Clear
+   its `fix` lines on slides you wrote or rewrote; slides the user wrote are theirs, leave them.
    Delete any old export left under a previous title.
 
 If the user asks for something that needs a new asset (a new theme, a new layout), say so rather

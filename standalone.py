@@ -10,6 +10,7 @@ any other script (CUSTOMIZING.md, Layer 3). Export-time transforms belong in
 the slaydy:serialize event, which the in-browser export honours.
 
 Usage:  python3 standalone.py path/to/deck.html [out.html]
+        python3 standalone.py --lint path/to/deck.html
         python3 standalone.py --explode path/to/standalone.html [out.html]
 
 Build writes one file next to the deck, named after the deck's <title> (or
@@ -20,6 +21,11 @@ is baked in) and <html> is marked data-standalone. Mirrors the runtime's
 own "Single file" export — keep the two in sync (see inlineAssets in
 runtime.js).
 
+Build lints the deck first (density budgets, deck structure, what the tier
+asks for, markup the skill forbids) and prints what it finds; the file is
+written either way. --lint does only that, and exits 1 when anything needs
+fixing.
+
 Explode is the inverse, for revising a deck when only the standalone file
 exists: inlined images come out as files in images/ (byte-identical files
 already there are reused, so a round trip restores original names), the
@@ -27,7 +33,8 @@ bundled stylesheet and runtime come out as bundle.css / bundle.js, and the
 result (deck-work.html by default) is a small, grep-able markup file that
 build accepts straight back. Base64 never passes through a revision.
 """
-import base64, hashlib, mimetypes, re, sys
+import base64, hashlib, math, mimetypes, re, sys
+from html.parser import HTMLParser
 from pathlib import Path
 from urllib.parse import unquote_to_bytes
 
@@ -117,6 +124,278 @@ def check_deck_blocks(html: str) -> None:
                 sys.exit(f"error: <style data-deck> references a relative url({rel[0]}).\n"
                          f"       Custom CSS can't carry assets — use an <img> or inline SVG\n"
                          f"       in the slide instead, so images keep travelling as files.")
+
+
+# ---- lint -------------------------------------------------------------------
+# The numbers are LAYOUTS.md "Density budgets" and the deck rules of SKILL.md
+# §3 and §10 — keep the three in sync. "fix" lines break a hard rule; "check"
+# lines are what a tier asks for by default and a slide may have a reason to
+# skip. Content the runtime leaves alone ([data-custom]), the user's own
+# stickers, speaker notes and icons are never counted.
+
+VOID = {"area", "base", "br", "col", "embed", "hr", "img", "input", "link", "meta", "source", "track", "wbr"}
+
+
+class Node:
+    def __init__(self, tag, attrs, parent):
+        self.tag, self.attrs, self.parent, self.kids = tag, dict(attrs), parent, []
+
+    @property
+    def cls(self):
+        return (self.attrs.get("class") or "").split()
+
+    def walk(self, skip=lambda n: False):
+        for k in self.kids:
+            if isinstance(k, Node) and not skip(k):
+                yield k
+                yield from k.walk(skip)
+
+    def text(self, skip=lambda n: False):
+        return "".join(k if isinstance(k, str) else ("" if skip(k) else k.text(skip)) for k in self.kids)
+
+
+class Tree(HTMLParser):
+    def __init__(self):
+        super().__init__(convert_charrefs=True)
+        self.root = self.cur = Node("#root", [], None)
+
+    def handle_starttag(self, tag, attrs):
+        n = Node(tag, attrs, self.cur)
+        self.cur.kids.append(n)
+        if tag not in VOID:
+            self.cur = n
+
+    def handle_startendtag(self, tag, attrs):
+        self.cur.kids.append(Node(tag, attrs, self.cur))
+
+    def handle_endtag(self, tag):
+        n = self.cur
+        while n.parent and n.tag != tag:
+            n = n.parent
+        if n.parent:
+            self.cur = n.parent
+
+    def handle_data(self, data):
+        self.cur.kids.append(data)
+
+
+def _ignored(n):
+    return ("data-custom" in n.attrs or "sticker" in n.cls or n.tag == "svg"
+            or (n.tag == "aside" and "notes" in n.cls))
+
+
+HEADLINE = {"title": 8, "section": 4, "statement": 12, "bullets": 8, "split": 8, "full": 8,
+            "gallery": 8, "end": 8, "callout": 6, "callout-full": 5}
+REVEALS = {"bullets": ("ul", "ol"), "cards": ("cards",), "stats": ("stats",), "bento": ("bento",),
+           "compare": ("compare",), "timeline": ("timeline",), "table": ("tbody",)}
+SEPARATOR = re.compile(r"[·•|]|\s[—–/]\s")
+
+
+def lint(html: str, folder: Path) -> list[tuple[str, str]]:
+    """Return (level, message) pairs for a folder deck's markup."""
+    tree = Tree()
+    tree.feed(html)
+    every = list(tree.root.walk())
+    out: list[tuple[str, str]] = []
+    fix = lambda m: out.append(("fix", m))
+    check = lambda m: out.append(("check", m))
+    words = lambda n: len(n.text(_ignored).split())
+    plural = lambda k, w: f"{k} {w}{'' if k == 1 else 's'}"
+
+    # the shell: a deck without it renders black
+    deck = next((n for n in every if n.tag == "div" and "deck" in n.cls
+                 and n.parent and "stage" in n.parent.cls), None)
+    if not deck:
+        return [("fix", 'no <div class="stage"><div class="deck"> wrapper — copy the deck skeleton exactly (LAYOUTS.md)')]
+    sheets = [n.attrs.get("href", "") for n in every if n.tag == "link" and n.attrs.get("rel") == "stylesheet"]
+    local = [h for h in sheets if is_rel(h)]
+    theme = next((n.attrs.get("href") for n in every if n.tag == "link" and n.attrs.get("id") == "theme"), None)
+    if not theme:
+        fix('no <link rel="stylesheet" … id="theme"> — copy the deck skeleton exactly (LAYOUTS.md)')
+    elif local and local[0] != theme and local.index(theme) < next((i for i, h in enumerate(local) if "runtime" in h or "bundle" in h), 0):
+        fix("the theme stylesheet is linked before runtime.css — runtime.css comes first")
+    if not any(n.tag == "script" and re.search(r"(runtime|bundle)[\w.]*\.js$", n.attrs.get("src", "")) for n in every):
+        fix('no <script src="runtime.js"> at the end of <body> — copy the deck skeleton exactly (LAYOUTS.md)')
+    for n in every:
+        if n.tag == "style" and "data-deck" not in n.attrs and not {"id", "data-theme"} & set(n.attrs):
+            fix("a <style> block without data-deck — decks carry no CSS of their own (SKILL.md §10)")
+        if n.tag == "script" and "src" not in n.attrs and "data-deck" not in n.attrs:
+            fix("an inline <script> without data-deck — decks carry no JavaScript of their own (SKILL.md §10)")
+    css = ""
+    for h in local:
+        f = folder / re.sub(r"\?.*$", "", h)
+        if f.is_file():
+            css += f.read_text(encoding="utf-8", errors="ignore")
+
+    slides = [n for n in deck.kids if isinstance(n, Node) and n.tag == "section" and "slide" in n.cls]
+    kind = lambda s: next((c[7:] for c in s.cls if c.startswith("slide--")), "?")
+    kinds = [kind(s) for s in slides]
+    brief = next((n.attrs.get("content", "") for n in every
+                  if n.tag == "meta" and n.attrs.get("name") == "slaydy-brief"), "")
+    tier = (re.search(r"tier=(\w+)", brief) or [None, None])[1]
+    staged = tier in ("polished", "bespoke")
+    if not brief:
+        check('no <meta name="slaydy-brief"> in <head> — the tier and tone are lost for the next revision')
+
+    for i, (s, k) in enumerate(zip(slides, kinds), 1):
+        at = f"slide {i} ({k})"
+        if k in ("placeholder", "blank"):
+            continue
+        if css and f".slide--{k}" not in css:
+            fix(f"{at}: no such layout in this deck's stylesheets — use one from LAYOUTS.md")
+            continue
+        inside = list(s.walk(_ignored))
+        by_cls = lambda c: [n for n in inside if c in n.cls]
+        by_tag = lambda *t: [n for n in inside if n.tag in t]
+
+        def cap(nodes, limit, what, unit="word"):
+            for n in nodes:
+                size = len(n.text(_ignored).strip()) if unit == "character" else words(n)
+                if size > limit:
+                    quote = " ".join(n.text(_ignored).split())
+                    quote = quote if len(quote) <= 44 else quote[:42] + "…"
+                    fix(f'{at}: {what} "{quote}" is {plural(size, unit)}, limit {limit}')
+
+        def count(nodes, lo, hi, what):
+            if not lo <= len(nodes) <= hi:
+                want = str(lo) if lo == hi else f"{lo}–{hi}"
+                fix(f"{at}: {plural(len(nodes), what)}, the layout takes {want}")
+
+        heads = [n for n in inside if n.tag in ("h1", "h2") or (k == "callout-full" and n.tag == "h3")]
+        if k in HEADLINE:
+            cap(heads[:1], HEADLINE[k], "headline")
+        cap(by_cls("lead"), 20, "lead")
+        items = by_tag("li")
+        nums = by_cls("stat__num")
+        if k == "bullets":
+            count(items, 1, 5, "item"); cap(items, 14, "item")
+        elif k == "agenda":
+            count(items, 1, 10, "item"); cap(by_cls("t") or items, 6, "item")
+        elif k == "cards":
+            count(by_cls("card"), 3, 3, "card"); cap(by_cls("h3"), 4, "card title"); cap(by_cls("body"), 25, "card body")
+        elif k == "bento":
+            count(by_cls("cell"), 5, 5, "cell"); cap(by_cls("h3"), 3, "cell title"); cap(by_cls("body"), 14, "cell body")
+            cap(nums, 6, "number", "character")
+        elif k == "stats":
+            count(by_cls("stat"), 3, 3, "figure"); cap(nums, 6, "number", "character"); cap(by_cls("body"), 12, "stat body")
+        elif k == "number":
+            cap(nums, 7, "number", "character")
+        elif k == "compare":
+            cols = by_cls("col")
+            count(cols, 2, 2, "column"); cap(by_cls("h3"), 3, "column title"); cap(items, 10, "item")
+            for c in cols:
+                n_items = [n for n in c.walk(_ignored) if n.tag == "li"]
+                if len(n_items) > 4:
+                    fix(f"{at}: a column has {len(n_items)} items, limit 4")
+        elif k == "table":
+            rows = by_tag("tr")
+            body_rows = [r for r in rows if r.parent and r.parent.tag == "tbody"]
+            widest = max((len([c for c in r.kids if isinstance(c, Node)]) for r in rows), default=0)
+            if widest > 5:
+                fix(f"{at}: {widest} columns, limit 5")
+            if len(body_rows) > 6:
+                fix(f"{at}: {len(body_rows)} body rows, limit 6")
+            cap(by_tag("td"), 6, "cell"); cap(by_tag("th"), 3, "header")
+        elif k == "timeline":
+            count(by_cls("step"), 3, 5, "step"); cap(by_cls("caption"), 3, "step caption")
+            cap(by_cls("h3"), 3, "step title"); cap(by_cls("body"), 8, "step body")
+        elif k in ("callout", "callout-full"):
+            pins = by_cls("pin")
+            if len(pins) > (6 if k == "callout" else 5):
+                fix(f"{at}: {len(pins)} pins, limit {6 if k == 'callout' else 5}")
+            if len(pins) != len(items):
+                fix(f"{at}: {plural(len(pins), 'pin')} but {plural(len(items), 'note')} — they pair by order")
+            cap(items, 12 if k == "callout" else 10, "note")
+        elif k == "split":
+            body = by_cls("split__body")
+            total = sum(words(p) for b in body for p in b.walk(_ignored) if p.tag == "p")
+            if total > 60:
+                fix(f"{at}: body is {total} words, limit 60")
+        elif k == "quote":
+            cap(by_tag("blockquote"), 30, "quotation"); cap(by_tag("figcaption"), 12, "attribution")
+        elif k == "image":
+            cap(by_cls("credit"), 12, "credit")
+        elif k == "gallery":
+            count([n for g in by_cls("gallery") for n in g.kids if isinstance(n, Node) and n.tag == "figure"], 2, 4, "image")
+        elif k == "code":
+            for pre in by_tag("pre"):
+                lines = pre.text().strip("\n").split("\n")
+                if len(lines) > 14:
+                    fix(f"{at}: {len(lines)} lines of code, limit 14")
+                if max(map(len, lines), default=0) > 60:
+                    fix(f"{at}: a code line is {max(map(len, lines))} characters, limit 60")
+
+        for n in inside:
+            if "style" in n.attrs and "pin" not in n.cls:
+                fix(f"{at}: inline style on <{n.tag}> — only a callout .pin may carry one (SKILL.md §10)")
+            if {"meta", "eyebrow", "chip", "caption"} & set(n.cls) and SEPARATOR.search(n.text(_ignored).strip()):
+                fix(f'{at}: a typed separator in "{" ".join(n.text(_ignored).split())[:40]}" — '
+                    f"use bare <span>s in .meta, or reword (SKILL.md §10)")
+            if n.tag == "img":
+                src = n.attrs.get("src", "")
+                if src.startswith("data:"):
+                    fix(f"{at}: a base64 image in the folder deck — images are files with relative paths")
+                elif is_rel(src) and not (folder / src).is_file():
+                    fix(f"{at}: image {src} does not exist — use a real file or leave the slot empty")
+
+        if staged:
+            notes = [n for n in s.walk() if n.tag == "aside" and "notes" in n.cls and n.text().strip()]
+            if not notes and (tier == "bespoke" or k not in ("title", "section", "end", "image")):
+                fix(f"{at}: no speaker notes — the {tier} tier has them on every "
+                    f"{'slide' if tier == 'bespoke' else 'content slide'}")
+            if k == "agenda" and any("data-reveal" in n.attrs for n in inside):
+                fix(f"{at}: data-reveal on an agenda — never")
+            want = REVEALS.get(k)
+            if want and not any("data-reveal" in n.attrs for n in inside if n.tag in want or set(want) & set(n.cls)):
+                check(f"{at}: no data-reveal on its list or grid — the {tier} tier reveals them, "
+                      f"unless the slide must be read at a glance")
+            if k != "bento" and any("data-animate" not in n.attrs and re.search(r"\d", n.text()) for n in nums):
+                check(f'{at}: a number without data-animate="count" — the {tier} tier counts stats up')
+            if k == "section" and tier == "polished" and s.attrs.get("data-transition") != "wipe":
+                check(f'{at}: no data-transition="wipe" — the polished tier wipes into section dividers')
+
+    # the deck as a whole
+    n = len(slides)
+    real = [k for k in kinds if k not in ("placeholder", "blank")]
+    if real and real[0] != "title":
+        fix(f"the deck opens with a {real[0]} slide — open with slide--title")
+    if real and real[-1] != "end":
+        fix(f"the deck closes with a {real[-1]} slide — close with slide--end")
+    if n > 40:
+        fix(f"{n} slides — cap is 40")
+    for i, (a, b) in enumerate(zip(kinds, kinds[1:]), 1):
+        if a == b == "bullets":
+            fix(f"slides {i} and {i + 1} are both bullets — vary the layout (bento, compare, timeline)")
+    content = [k for k in kinds if k not in ("title", "agenda", "section", "end")]
+    if "agenda" in kinds and len(content) <= 8:
+        fix(f"an agenda for {plural(len(content), 'content slide')} — add one only above 8")
+    dividers = [i for i, k in enumerate(kinds) if k == "section"]
+    for d, nxt in zip(dividers, dividers[1:] + [n]):
+        group = [k for k in kinds[d + 1:nxt] if k != "end"]
+        if len(group) < 4:   # one short of the rule is a judgment call, less is not
+            (check if len(group) == 3 else fix)(
+                f"slide {d + 1} (section) opens a group of {plural(len(group), 'slide')} — "
+                f"a divider opens 4–7 content slides; merge the group or drop the divider")
+    for k in ("stats", "number", "quote"):
+        if kinds.count(k) > max(1, math.ceil(n / 10)):
+            fix(f"{kinds.count(k)} {k} slides in {n} — at most one per 10 slides")
+    return out
+
+
+def report(findings, src: Path) -> int:
+    """Print the findings; returns how many are 'fix'."""
+    fixes = sum(1 for lvl, _ in findings if lvl == "fix")
+    if not findings:
+        print(f"lint: clean — {src.name}")
+        return 0
+    print(f"lint: {fixes} to fix, {len(findings) - fixes} to check — {src.name}")
+    for lvl, msg in sorted(findings, key=lambda f: f[0] != "fix"):
+        print(f"  {lvl:<5}  {msg}")
+    if fixes:
+        print('Fix every "fix" line in the deck (cut words or split the slide, never restyle) and run\n'
+              "this again until none remain. In a revision, slides the user wrote are theirs: leave those.")
+    return fixes
+
 
 
 def deck_title(html: str) -> str:
@@ -276,8 +555,8 @@ def explode(src: Path, html: str, out: Path) -> None:
 
 if __name__ == "__main__":
     args = sys.argv[1:]
-    mode = "explode" if args and args[0] == "--explode" else "build"
-    if mode == "explode":
+    mode = args[0][2:] if args and args[0] in ("--explode", "--lint") else "build"
+    if mode != "build":
         args = args[1:]
     if not args or len(args) > 2 or any(a.startswith("-") for a in args):
         sys.exit(__doc__.strip())
@@ -285,6 +564,8 @@ if __name__ == "__main__":
     if not src.is_file():
         sys.exit(f"not found: {src}")
     html = src.read_text(encoding="utf-8")
+    if mode == "lint":
+        sys.exit(1 if report(lint(html, src.parent), src) else 0)
     if mode == "explode":
         explode(src, html, Path(args[1]) if len(args) > 1 else src.with_name("deck-work.html"))
     else:
@@ -292,3 +573,4 @@ if __name__ == "__main__":
         if out.resolve() == src.resolve():
             sys.exit("output would overwrite the input — pass a different out.html")
         build(src, out)
+        report(lint(html, src.parent), src)
