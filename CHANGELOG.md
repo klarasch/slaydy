@@ -14,6 +14,15 @@ Tags on an entry: **runtime** (runtime.*), **docs** (the contract docs), **skele
 
 ## 2026-10-04
 
+### Slide PNGs include icons and canvas content
+**runtime**
+- The PNG is drawn from an isolated copy of the slide, so icons that point at a sprite elsewhere in
+  the page (`<use href="#i-…">`, list icons, separators, a brand's own sprite) came out blank. The
+  symbols a slide references now travel with it.
+- A `<canvas>` on the slide is exported with its current pixels instead of blank.
+
+**Forks:** nothing. Video and iframes on a slide still export empty.
+
 ### Save falls back to a download where the save dialog is refused
 **runtime, docs**
 - A standalone deck inside a cross-origin frame (an embedded preview) has a save dialog the browser
