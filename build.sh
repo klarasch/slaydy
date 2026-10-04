@@ -41,16 +41,26 @@ esac
 #   - an esbuild already on PATH is used first, else a pinned npx one;
 #   - output goes to a temp dir and is checked smaller than its source before
 #     it replaces anything, a copy-through shim must not become a fake .min;
-#   - on any failure the existing .min files are left untouched.
+#   - on any failure the existing .min files are left untouched;
+#   - each .min opens with a stamp of the source it was built from, and that
+#     stamp, not file time, says whether it is current: a copy, a clone or an
+#     update resets file times, and must not send a fork looking for esbuild.
 ESBUILD_VERSION="0.28.2"
 # Minifying is an optimisation, never a requirement: whatever goes wrong here
 # (no esbuild, registry blocked, a shim, SLAYDY_MINIFY=0) the build warns,
 # leaves the tracked .min files as they are, and carries on.
+src_stamp() { python3 -c 'import hashlib,sys; print(hashlib.sha1(open(sys.argv[1],"rb").read()).hexdigest()[:12])' "$1"; }
+min_current() { [ -f "$2" ] && head -c 80 "$2" | grep -q "slaydy-min $(src_stamp "$1") "; }
+# a registry that never answers must not hang the build (macOS has no `timeout`)
+with_timeout() {
+  local secs="$1"; shift
+  if command -v perl >/dev/null 2>&1; then perl -e 'alarm shift; exec @ARGV' "$secs" "$@"; else "$@"; fi
+}
 minify() {
   [ "${SLAYDY_MINIFY:-1}" = "0" ] && { echo "minify: skipped (SLAYDY_MINIFY=0)"; return 0; }
   local ESBUILD MINTMP f m
-  # shipped .min files newer than their sources are current: nothing to do, no esbuild needed
-  if [ runtime.min.js -nt runtime.js ] && [ runtime.min.css -nt runtime.css ]; then
+  # shipped .min files stamped with their source's hash are current: nothing to do, no esbuild needed
+  if min_current runtime.js runtime.min.js && min_current runtime.css runtime.min.css; then
     echo "minify: runtime.min.* are up to date, nothing to do"; return 0
   fi
   if command -v esbuild >/dev/null 2>&1; then ESBUILD=esbuild      # already installed: no network
@@ -59,8 +69,8 @@ minify() {
   MINTMP="$(mktemp -d)"
   for f in runtime.js runtime.css; do
     m="${f%.*}.min.${f##*.}"
-    if ! $ESBUILD "$f" --minify --outfile="$MINTMP/$m" --log-level=warning </dev/null; then
-      echo "warning: esbuild failed (offline or blocked registry?) — skipping minification, existing runtime.min.* left as they are" >&2
+    if ! with_timeout 90 $ESBUILD "$f" --minify --outfile="$MINTMP/$m" --log-level=warning </dev/null; then
+      echo "warning: esbuild failed or timed out (offline or blocked registry?) — skipping minification, existing runtime.min.* left as they are" >&2
       rm -rf "$MINTMP"; return 0
     fi
     # a copy-through shim would make a fake .min that the exporters then prefer
@@ -69,8 +79,10 @@ minify() {
       rm -rf "$MINTMP"; return 0
     fi
   done
-  cp "$MINTMP/runtime.min.js" runtime.min.js
-  cp "$MINTMP/runtime.min.css" runtime.min.css
+  for f in runtime.js runtime.css; do
+    m="${f%.*}.min.${f##*.}"
+    { printf '/*! slaydy-min %s */\n' "$(src_stamp "$f")"; cat "$MINTMP/$m"; } > "$m"
+  done
   rm -rf "$MINTMP"
   echo "minified: runtime.min.js ($(du -k runtime.min.js | cut -f1)K) runtime.min.css ($(du -k runtime.min.css | cut -f1)K)"
 }

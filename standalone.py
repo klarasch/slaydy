@@ -6,8 +6,10 @@ UPSTREAM-OWNED. Every update replaces this file whole, and an edit here is
 skipped by take-update.sh from then on (UPDATING.md §1). If the export can't
 see an asset of yours, make the asset visible instead of patching this: put
 what your script fetches behind a real <script src> and it is inlined like
-any other script (CUSTOMIZING.md, Layer 3). Export-time transforms belong in
-the slaydy:serialize event, which the in-browser export honours.
+any other script (CUSTOMIZING.md, Layer 3). For what can't be a file, a
+fork-owned standalone_hook.py beside this script adds to the bundle (see
+run_hook below); the in-browser export has the slaydy:serialize event for
+the same job.
 
 Usage:  python3 standalone.py path/to/deck.html [out.html]
         python3 standalone.py --lint path/to/deck.html
@@ -33,7 +35,7 @@ bundled stylesheet and runtime come out as bundle.css / bundle.js, and the
 result (deck-work.html by default) is a small, grep-able markup file that
 build accepts straight back. Base64 never passes through a revision.
 """
-import base64, hashlib, math, mimetypes, re, sys
+import base64, hashlib, importlib.util, math, mimetypes, re, sys
 from html.parser import HTMLParser
 from pathlib import Path
 from urllib.parse import unquote_to_bytes
@@ -61,10 +63,20 @@ def is_rel(u: str) -> bool:
 
 def read_asset(p: Path, minifier) -> str:
     """Prefer a pre-minified sibling (runtime.min.js, built by build.sh) when
-    it is at least as new as the source; otherwise compact the source."""
+    it was built from this source; otherwise compact the source. build.sh
+    stamps each .min with its source's hash, which survives the copies and
+    clones that reset file times. A .min from before the stamp falls back to
+    being at least as new as the source."""
     m = p.with_name(re.sub(r"\.(css|js)$", r".min.\1", p.name))
-    if m.is_file() and m.stat().st_mtime >= p.stat().st_mtime:
-        return m.read_text(encoding="utf-8")
+    if m.is_file():
+        text = m.read_text(encoding="utf-8")
+        stamp = re.match(r"/\*! slaydy-min (\w+) \*/", text)
+        if stamp:
+            current = hashlib.sha1(p.read_bytes()).hexdigest()[:12] == stamp.group(1)
+        else:
+            current = m.stat().st_mtime >= p.stat().st_mtime
+        if current:
+            return text
     return minifier(p.read_text(encoding="utf-8"))
 
 
@@ -403,10 +415,48 @@ def deck_title(html: str) -> str:
     return name or "deck"
 
 
+# what a hook adds is fenced, so --explode can take it back out and a rebuild
+# does not carry it twice
+HOOK_OPEN, HOOK_CLOSE = "/* slaydy-hook */", "/* /slaydy-hook */"
+HOOKED = re.compile(re.escape(HOOK_OPEN) + r"[\s\S]*?" + re.escape(HOOK_CLOSE) + r"\n?")
+
+
+def run_hook(folder: Path, html: str) -> tuple[str, str]:
+    """The export's one extension point, the Python twin of slaydy:serialize.
+
+    A fork may ship standalone_hook.py beside this script (or one folder down,
+    brand/standalone_hook.py) defining
+
+        def hook(folder: Path, html: str) -> str | dict
+
+    It is called once per build with the deck folder and the deck's markup and
+    returns JavaScript to run before the runtime — typically the assets a
+    brand script would otherwise fetch at display time, assigned to a global
+    it reads — or {"js": ..., "css": ...} to add a stylesheet as well. The
+    hook is looked for next to this script only, never in the deck folder: a
+    deck is content, and content must not get to run code. A hook that raises
+    stops the build; a deck silently missing its brand assets is worse."""
+    here = Path(__file__).resolve().parent
+    found = sorted(f for f in [here / "standalone_hook.py", *here.glob("*/standalone_hook.py")] if f.is_file())
+    if not found:
+        return "", ""
+    spec = importlib.util.spec_from_file_location("standalone_hook", found[0])
+    mod = importlib.util.module_from_spec(spec)
+    try:
+        spec.loader.exec_module(mod)
+        got = mod.hook(folder, html)
+    except Exception as e:
+        sys.exit(f"error: {found[0]} failed — {type(e).__name__}: {e}")
+    got = got if isinstance(got, dict) else {"js": got or ""}
+    fence = lambda t: f"{HOOK_OPEN}\n{t.strip()}\n{HOOK_CLOSE}" if t and t.strip() else ""
+    return fence(got.get("css", "")), fence(got.get("js", ""))
+
+
 def build(deck_path: Path, out_path: Path) -> None:
     folder = deck_path.parent
     html = deck_path.read_text(encoding="utf-8")
     check_deck_blocks(html)
+    hook_css, hook_js = run_hook(folder, html)
     css_parts, js_parts = [], []
     theme_blocks: list[tuple[str, str]] = []
     active_name = {"v": None}
@@ -438,18 +488,19 @@ def build(deck_path: Path, out_path: Path) -> None:
         css_parts.append(inline_css_urls(read_asset(sheet, min_css), sheet.parent))
         return ""
 
+    # three sequences can derail the HTML parser's script-data states
+    # (</script ends it, <!-- followed by <script swallows the real
+    # close tag); each escape is the same text inside a string, regex
+    # or comment, and \u0073 is a valid identifier escape.
+    safe_js = lambda js: (js.replace("</script", "<\\/script")
+                            .replace("<!--", "<\\u0021--")
+                            .replace("<script", "<\\u0073cript"))
+
     def take_script(m):
         src = m.group(1)
         if not is_rel(src):
             return m.group(0)
-        js = read_asset(folder / src, min_js)
-        # three sequences can derail the HTML parser's script-data states
-        # (</script ends it, <!-- followed by <script swallows the real
-        # close tag); each escape is the same text inside a string, regex
-        # or comment, and \u0073 is a valid identifier escape.
-        js_parts.append(js.replace("</script", "<\\/script")
-                          .replace("<!--", "<\\u0021--")
-                          .replace("<script", "<\\u0073cript"))
+        js_parts.append(safe_js(read_asset(folder / src, min_js)))
         return ""
 
     def inline_img(m):
@@ -461,6 +512,10 @@ def build(deck_path: Path, out_path: Path) -> None:
     html = re.sub(r"<link[^>]*>\n?", take_link, html)
     html = re.sub(r'<script src="([^"]+)"></script>\n?', take_script, html)
     html = re.sub(r'<img[^>]*src="([^"]+)"[^>]*>', inline_img, html)
+    if hook_js:
+        js_parts.insert(0, safe_js(hook_js))      # before the runtime and the brand's own scripts
+    if hook_css:
+        css_parts.append(hook_css)
 
     logo = re.search(r'data-logo="([^"]+)"', html)
     if logo and is_rel(logo.group(1)):
@@ -523,8 +578,9 @@ def explode(src: Path, html: str, out: Path) -> None:
         r"<script>([\s\S]*?)</script>\s*(?=</body>)", html)
     if not m:
         sys.exit("no inlined bundle found — is this a standalone (data-standalone) deck?")
-    css = m.group(1).replace("body{visibility:visible}", "").strip() + "\n"
-    js = m.group(3).replace("<\\/script", "</script").strip() + "\n"
+    # what a hook added is rebuilt by the hook, not carried in the bundle
+    css = HOOKED.sub("", m.group(1)).replace("body{visibility:visible}", "").strip() + "\n"
+    js = HOOKED.sub("", m.group(3)).replace("<\\/script", "</script").strip() + "\n"
     (folder / "bundle.css").write_text(css, encoding="utf-8")
     (folder / "bundle.js").write_text(js, encoding="utf-8")
     active = None

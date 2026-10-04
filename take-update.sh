@@ -156,7 +156,7 @@ where_it_goes() {
   say "    *.md           → themes/<brand>.md  the brand: voice and behaviour rules"
   say "    build.sh       → SKILL.fork.md      the skill name; fonts/ images/ custom* ship on their own"
   say "    runtime.*      → your theme, custom.css, custom.js, custom/, the slaydy:* events"
-  say "    standalone.py  → a real <script src> for what you fetch (CUSTOMIZING.md, Layer 3)"
+  say "    standalone.py  → a real <script src> for what you fetch, or standalone_hook.py (CUSTOMIZING.md, Layer 3)"
   say "If none of those can express it, that is a gap worth reporting upstream, not editing around."
 }
 

@@ -19,6 +19,25 @@ the named thing has something to do or to delete), **port** (every fork has to a
 
 ## 2026-10-05
 
+### A hook for standalone.py, and minified files judged by content
+**runtime, docs, feature, fix**
+- `standalone.py` has an extension point, the twin of the browser's `slaydy:serialize`: a
+  fork-owned `standalone_hook.py` beside it (or one folder down) defines `hook(folder, html)`
+  and returns JavaScript, or `{"js", "css"}`, that goes into the bundle ahead of the runtime.
+  `--explode` takes it back out, so a rebuild never carries it twice. `CUSTOMIZING.md`,
+  "Lazy-loaded assets", has an example.
+- `build.sh` and `standalone.py` no longer decide by file time whether `runtime.min.*` are
+  current. Each `.min` opens with a stamp of the source it was built from. An update or a clone
+  resets file times, which used to send the next build looking for esbuild and could rewrite the
+  tracked `.min` files with a different esbuild.
+- The esbuild download in `build.sh` gives up after 90 seconds instead of hanging on a registry
+  that never answers; the existing `.min` files are kept, as on any other failure.
+
+**Forks:** check. A fork that patched `standalone.py` to inline its own assets can move that
+into `standalone_hook.py` and take upstream's file again. After this update `./build.sh` should
+print "runtime.min.* are up to date"; if it minifies instead, the fork's `runtime.js` or
+`runtime.css` differs from upstream's.
+
 ### standalone.py lints the deck
 **docs, feature** — Building the share file now checks the deck first and prints what it finds:
 the density budgets per layout, deck structure (title first, end last, no two bullets in a

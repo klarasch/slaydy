@@ -42,7 +42,7 @@ runtime appended at the end of `<body>`, a `#standalone-guard` style in `<head>`
 unstyled flash, images/logo as data: URIs, `data-themes` stripped, `<html data-standalone>`.
 Both exporters prefer pre-minified `runtime.min.js`/`runtime.min.css` built by `build.sh`
 (esbuild pinned in `build.sh`, output checked smaller than its source before it replaces the tracked
-files, never `rm`'d when esbuild is missing; standalone.py checks mtime freshness, the browser can't); without them they
+files, never `rm`'d when esbuild is missing; standalone.py checks the source-hash stamp build.sh writes into each .min, the browser can't); without them they
 fall back to conservative compaction (comments/indent/blank lines only — line-interior
 whitespace is never touched, protecting CSS content strings and JS template HTML).
 Both also escape `</script`, `<!--` and `<script` in the inlined JS (`<\/script`, `<\u0021--`,

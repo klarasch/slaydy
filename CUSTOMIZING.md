@@ -155,8 +155,24 @@ inline everything it references.
 An asset your script `fetch()`es at display time is invisible to them and dangles in the
 single file. Before reaching for a hook, stop it being invisible: write the set the deck uses
 to a real file behind a real `<script src>` (an icon bundle, a data file) at generation or
-export time, and the exporters inline it like any other script. The `slaydy:serialize` event
-below covers the cases where the set genuinely isn't knowable until display.
+export time, and the exporters inline it like any other script. Where the set genuinely isn't
+knowable until display, each exporter has one hook, and a brand that needs one needs both:
+
+- In the browser (Download copy), the `slaydy:serialize` event below.
+- In `standalone.py`, a `standalone_hook.py` of yours beside it (or one folder down, such as
+  `brand/standalone_hook.py`). It defines `hook(folder, html)` and returns JavaScript that
+  runs before the runtime, or `{"js": …, "css": …}`: usually the assets your script would
+  fetch, assigned to a global it reads first. The file is yours; no update touches it.
+
+```python
+# standalone_hook.py
+import json
+from pathlib import Path
+
+def hook(folder: Path, html: str) -> str:
+    icons = {f.stem: f.read_text() for f in (folder / "brand" / "icons").glob("*.svg")}
+    return "window.BRAND_ICONS = " + json.dumps(icons) + ";"
+```
 
 The runtime emits events for you to hook:
 

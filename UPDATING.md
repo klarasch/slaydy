@@ -23,7 +23,7 @@ themes/{midnight,paper,mint}.css                             refreshed only if y
 
 Everything else in a fork — `SKILL.fork.md`, `skeleton.html`, `.skillignore`, your theme,
 your fonts, your logo, `custom.css`, `custom.js`, `custom/` or whatever your brand layer is
-called, `themes/default`, your own icons — is yours, and no update touches it, and all of it
+called, `themes/default`, `standalone_hook.py`, your own icons — is yours, and no update touches it, and all of it
 ships. One duty comes with `skeleton.html`: when the changelog says the skeleton changed, port
 the change into yours by hand.
 

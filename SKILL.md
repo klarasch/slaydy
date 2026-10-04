@@ -100,7 +100,7 @@ the working directory. One file reaches the user, every time.
 **everything in it**, byte for byte, with four exceptions:
 
 - the `.md` docs — they are for you, not the deck
-- `standalone.py` and `skeleton.html` — tools, not deck files
+- `standalone.py`, `standalone_hook.py` and `skeleton.html` — tools, not deck files
 - `icons/` — not copied as a folder; the symbols a deck uses are embedded into it as a sprite
   (`LAYOUTS.md`, Icons), so they travel inside `deck.html`
 - `themes/` — copy only the stylesheet(s) the deck links: the chosen theme, or every surface
