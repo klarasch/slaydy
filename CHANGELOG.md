@@ -21,12 +21,12 @@ the named thing has something to do or to delete), **port** (every fork has to a
 
 ### standalone.py lints the deck
 **docs, feature** — Building the share file now checks the deck first and prints what it finds:
-the density budgets per layout, deck structure (title first, end last, divider spacing, no two
-bullets in a row, agenda only above 8 content slides), what the tier asks for (speaker notes,
-reveals, count-ups), and markup the skill forbids (inline styles, undeclared `<style>` and
-`<script>`, typed separators, missing or base64 images, a layout that is not in the deck's
-stylesheets). `fix` lines break a rule; `check` lines are judgment calls. The file is written
-either way. `standalone.py --lint deck.html` only lints, and exits 1 on any `fix`. SKILL.md §3
+the density budgets per layout, deck structure (title first, end last, no two bullets in a
+row), speaker notes where the tier requires them, and markup the skill forbids (inline styles,
+undeclared `<style>` and `<script>`, typed separators, missing or base64 images, a layout that
+is not in the deck's stylesheets). Those are `fix` lines. `check` lines are judgment calls:
+divider spacing, an agenda on a short deck, reveals and count-ups. The file is written either
+way, and an error inside the lint never fails a build. `standalone.py --lint deck.html` only lints, and exits 1 on any `fix`. SKILL.md §3
 and §5 tell Claude to clear the `fix` lines before handing a deck over.
 
 **Forks:** check. A layout a fork adds is known to the lint as soon as its `.slide--<name>` rule

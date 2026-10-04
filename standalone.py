@@ -128,9 +128,9 @@ def check_deck_blocks(html: str) -> None:
 
 # ---- lint -------------------------------------------------------------------
 # The numbers are LAYOUTS.md "Density budgets" and the deck rules of SKILL.md
-# §3 and §10 — keep the three in sync. "fix" lines break a hard rule; "check"
-# lines are what a tier asks for by default and a slide may have a reason to
-# skip. Content the runtime leaves alone ([data-custom]), the user's own
+# §3 and §10 — keep the three in sync. "fix" lines break a rule that can be
+# counted; "check" lines are matters of judgment: pacing (dividers, agenda)
+# and what a tier asks for by default, which a slide may have a reason to skip. Content the runtime leaves alone ([data-custom]), the user's own
 # stickers, speaker notes and icons are never counted.
 
 VOID = {"area", "base", "br", "col", "embed", "hr", "img", "input", "link", "meta", "source", "track", "wbr"}
@@ -368,14 +368,13 @@ def lint(html: str, folder: Path) -> list[tuple[str, str]]:
             fix(f"slides {i} and {i + 1} are both bullets — vary the layout (bento, compare, timeline)")
     content = [k for k in kinds if k not in ("title", "agenda", "section", "end")]
     if "agenda" in kinds and len(content) <= 8:
-        fix(f"an agenda for {plural(len(content), 'content slide')} — add one only above 8")
+        check(f"an agenda for {plural(len(content), 'content slide')} — add one only above 8")
     dividers = [i for i, k in enumerate(kinds) if k == "section"]
     for d, nxt in zip(dividers, dividers[1:] + [n]):
         group = [k for k in kinds[d + 1:nxt] if k != "end"]
-        if len(group) < 4:   # one short of the rule is a judgment call, less is not
-            (check if len(group) == 3 else fix)(
-                f"slide {d + 1} (section) opens a group of {plural(len(group), 'slide')} — "
-                f"a divider opens 4–7 content slides; merge the group or drop the divider")
+        if len(group) < 4:
+            check(f"slide {d + 1} (section) opens a group of {plural(len(group), 'slide')} — "
+                  f"a divider opens 4–7 content slides; merge the group or drop the divider")
     for k in ("stats", "number", "quote"):
         if kinds.count(k) > max(1, math.ceil(n / 10)):
             fix(f"{kinds.count(k)} {k} slides in {n} — at most one per 10 slides")
@@ -573,4 +572,7 @@ if __name__ == "__main__":
         if out.resolve() == src.resolve():
             sys.exit("output would overwrite the input — pass a different out.html")
         build(src, out)
-        report(lint(html, src.parent), src)
+        try:                                   # advice only: a lint bug must never fail a build
+            report(lint(html, src.parent), src)
+        except Exception as e:
+            print(f"lint: skipped ({type(e).__name__}: {e})")
