@@ -994,34 +994,48 @@
     if (free) return clearGuides(slide);
     const pad = parseFloat(getComputedStyle(slide).getPropertyValue("--pad")) || 84;
     const sr = slide.getBoundingClientRect(), r = el.getBoundingClientRect();
+    // other objects on the slide are guides too: a sticker offers its edges and
+    // centre, a text block its edges (its centre is the middle of empty space)
+    const tx = [[pad, 0], [W - pad, 0], [W / 2, 0]], ty = [[pad, 0], [H - pad, 0], [H / 2, 0]];
+    const others = [...slide.children].filter(c => c !== el && !c.hidden &&
+      (c.classList.contains("sticker") || c.isContentEditable || c.querySelector(":scope > [contenteditable]")));
+    $$("[contenteditable]", slide).filter(t => !t.closest(".sticker")).forEach(t => others.push(t));
+    others.forEach(o => {
+      const b = o.getBoundingClientRect();
+      if (b.width < 2 || b.height < 2) return;
+      const l = (b.left - sr.left) / s, rt = (b.right - sr.left) / s, t = (b.top - sr.top) / s, bt = (b.bottom - sr.top) / s;
+      tx.push([l, 1], [rt, 1]); ty.push([t, 1], [bt, 1]);
+      if (o.classList.contains("sticker")) { tx.push([(l + rt) / 2, 1]); ty.push([(t + bt) / 2, 1]); }
+    });
     // nearest guide within reach wins; each box line (low edge, high edge, centre) may meet any guide
-    const axis = (lo, hi, size) => {
+    const axis = (lo, hi, targets) => {
       let best = null;
-      [[pad, lo], [size - pad, hi], [size / 2, (lo + hi) / 2]].forEach(([g, at]) => {
+      targets.forEach(([g, obj]) => [lo, hi, (lo + hi) / 2].forEach(at => {
         const d = g - at;
-        if (Math.abs(d) <= SNAP_PX && (!best || Math.abs(d) < Math.abs(best.d))) best = { g, d };
-      });
+        if (Math.abs(d) <= SNAP_PX && (!best || Math.abs(d) < Math.abs(best.d))) best = { g, d, obj };
+      }));
       return best;
     };
-    const sx = axis((r.left - sr.left) / s, (r.right - sr.left) / s, W);
-    const sy = axis((r.top - sr.top) / s, (r.bottom - sr.top) / s, H);
+    const sx = axis((r.left - sr.left) / s, (r.right - sr.left) / s, tx);
+    const sy = axis((r.top - sr.top) / s, (r.bottom - sr.top) / s, ty);
     if (sx) el.style.left = ((parseFloat(el.style.left) || 0) + sx.d / W * 100).toFixed(2) + "%";
     if (sy) el.style.top = ((parseFloat(el.style.top) || 0) + sy.d / H * 100).toFixed(2) + "%";
-    showGuides(slide, sx?.g, sy?.g);
+    showGuides(slide, sx, sy);
   }
-  function showGuides(slide, x, y) {
-    const mk = (axis, pos) => {
+  function showGuides(slide, sx, sy) {
+    const mk = (axis, hit) => {
       let g = $(`.guide[data-axis="${axis}"]`, slide);
-      if (pos == null) { g?.remove(); return; }
+      if (!hit) { g?.remove(); return; }
       if (!g) {
         g = document.createElement("i");
         g.className = "guide"; g.dataset.axis = axis; g.dataset.gen = "";
         slide.append(g);
       }
-      g.style[axis === "x" ? "left" : "top"] = pos + "px";
-      g.classList.toggle("is-centre", pos === (axis === "x" ? W : H) / 2);
+      g.style[axis === "x" ? "left" : "top"] = hit.g + "px";
+      g.classList.toggle("is-centre", !hit.obj && hit.g === (axis === "x" ? W : H) / 2);
+      g.classList.toggle("is-object", !!hit.obj);
     };
-    mk("x", x); mk("y", y);
+    mk("x", sx); mk("y", sy);
   }
   const clearGuides = slide => $$(".guide", slide).forEach(g => g.remove());
 

@@ -14,6 +14,13 @@ Tags on an entry: **runtime** (runtime.*), **docs** (the contract docs), **skele
 
 ## 2026-10-04
 
+### Sticker guides to other objects
+**runtime**
+- Dragging a sticker now also snaps to the edges and centre of other stickers, and to the edges of the
+  slide's text blocks. These guides are blue; margin and centre guides are unchanged. Alt still drags freely.
+
+**Forks:** Nothing.
+
 ### Blank split halves
 **runtime, docs, attribute**
 - `data-clean` now also works on `slide--split`: it hides the image half (empty slot or picture; the
