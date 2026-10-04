@@ -14,6 +14,12 @@ Tags on an entry: **runtime** (runtime.*), **docs** (the contract docs), **skele
 
 ## 2026-10-04
 
+### Slide-options dropdowns get their own chevron
+**runtime** — `.opt-select` hid the native chevron's padding, leaving it stuck to the right border.
+It now draws its own chevron with right padding so the label cannot run under it.
+
+**Forks:** drop any `select` chevron override in the slide-options panel.
+
 ### Overflow guard measures with bounding rects
 **runtime**
 - `overflows()` used `offsetTop`/`offsetHeight`, which current Chrome reports in the element's own
