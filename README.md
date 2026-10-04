@@ -63,6 +63,11 @@ Press **Save…** and Chrome asks for a folder once. Pick the deck's own folder.
 The runtime writes any newly added images into `images/` as real files and rewrites
 `deck.html` in place, with markup still pointing at relative paths.
 
+A single-file deck can't remember a file between sessions, so it never autosaves.
+**Save…** opens the ordinary save dialog (Chrome and Edge): pick a name and folder, or pick the
+file you want to replace and confirm. Until you save, the button reads "Unsaved changes". **Download
+copy** is the same thing as a plain download.
+
 If the File System Access API isn't available (Firefox/Safari) it falls back to
 downloading a self-contained `deck-edited.html` (see below).
 
@@ -74,7 +79,8 @@ image baked in. You get it two ways:
 
 - **At generation** — the skill runs `standalone.py` and writes it next to `deck.html`, so in
   Cowork the shareable file exists the moment the deck does.
-- **After editing** — press **Download copy** in the toolbar to download a fresh one.
+- **After editing** — in Chrome or Edge, **Save…** writes over the file you opened; elsewhere (or for
+  a separate copy) press **Download copy** in the toolbar.
 
 The file is built content-first: your slide markup sits at the top, hand-editable in any text
 editor; the minified stylesheet and runtime are appended at the end of `<body>` (a one-line

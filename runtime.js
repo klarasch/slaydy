@@ -672,10 +672,10 @@
     if (!editing) { closePopover(); closePicker(); }
     if (editing) {
       toast(`Edit mode — click any text to change it. ${KEY.cmd}V pastes an image onto the slide.`);
-    } else if (document.documentElement.hasAttribute("data-standalone") && dirty && !dirHandle) {
+    } else if (document.documentElement.hasAttribute("data-standalone") && dirty && !hasTarget()) {
       // standalone + unsaved + no folder handle: the edits only exist in this
       // tab. Replaces the plain "Edit mode off" toast — never both.
-      toast("Your edits live only in this tab — Download copy saves an updated file.", { key: "D" });
+      toast(`Your edits are not saved — they live only in this tab. Press E, then ${window.showSaveFilePicker ? "Save…" : "Download copy"} to keep them.`, { duration: 9000 });
     } else {
       toast("Edit mode off");
     }
@@ -997,34 +997,48 @@
     if (free) return clearGuides(slide);
     const pad = parseFloat(getComputedStyle(slide).getPropertyValue("--pad")) || 84;
     const sr = slide.getBoundingClientRect(), r = el.getBoundingClientRect();
+    // other objects on the slide are guides too: a sticker offers its edges and
+    // centre, a text block its edges (its centre is the middle of empty space)
+    const tx = [[pad, 0], [W - pad, 0], [W / 2, 0]], ty = [[pad, 0], [H - pad, 0], [H / 2, 0]];
+    const others = [...slide.children].filter(c => c !== el && !c.hidden &&
+      (c.classList.contains("sticker") || c.isContentEditable || c.querySelector(":scope > [contenteditable]")));
+    $$("[contenteditable]", slide).filter(t => !t.closest(".sticker")).forEach(t => others.push(t));
+    others.forEach(o => {
+      const b = o.getBoundingClientRect();
+      if (b.width < 2 || b.height < 2) return;
+      const l = (b.left - sr.left) / s, rt = (b.right - sr.left) / s, t = (b.top - sr.top) / s, bt = (b.bottom - sr.top) / s;
+      tx.push([l, 1], [rt, 1]); ty.push([t, 1], [bt, 1]);
+      if (o.classList.contains("sticker")) { tx.push([(l + rt) / 2, 1]); ty.push([(t + bt) / 2, 1]); }
+    });
     // nearest guide within reach wins; each box line (low edge, high edge, centre) may meet any guide
-    const axis = (lo, hi, size) => {
+    const axis = (lo, hi, targets) => {
       let best = null;
-      [[pad, lo], [size - pad, hi], [size / 2, (lo + hi) / 2]].forEach(([g, at]) => {
+      targets.forEach(([g, obj]) => [lo, hi, (lo + hi) / 2].forEach(at => {
         const d = g - at;
-        if (Math.abs(d) <= SNAP_PX && (!best || Math.abs(d) < Math.abs(best.d))) best = { g, d };
-      });
+        if (Math.abs(d) <= SNAP_PX && (!best || Math.abs(d) < Math.abs(best.d))) best = { g, d, obj };
+      }));
       return best;
     };
-    const sx = axis((r.left - sr.left) / s, (r.right - sr.left) / s, W);
-    const sy = axis((r.top - sr.top) / s, (r.bottom - sr.top) / s, H);
+    const sx = axis((r.left - sr.left) / s, (r.right - sr.left) / s, tx);
+    const sy = axis((r.top - sr.top) / s, (r.bottom - sr.top) / s, ty);
     if (sx) el.style.left = ((parseFloat(el.style.left) || 0) + sx.d / W * 100).toFixed(2) + "%";
     if (sy) el.style.top = ((parseFloat(el.style.top) || 0) + sy.d / H * 100).toFixed(2) + "%";
-    showGuides(slide, sx?.g, sy?.g);
+    showGuides(slide, sx, sy);
   }
-  function showGuides(slide, x, y) {
-    const mk = (axis, pos) => {
+  function showGuides(slide, sx, sy) {
+    const mk = (axis, hit) => {
       let g = $(`.guide[data-axis="${axis}"]`, slide);
-      if (pos == null) { g?.remove(); return; }
+      if (!hit) { g?.remove(); return; }
       if (!g) {
         g = document.createElement("i");
         g.className = "guide"; g.dataset.axis = axis; g.dataset.gen = "";
         slide.append(g);
       }
-      g.style[axis === "x" ? "left" : "top"] = pos + "px";
-      g.classList.toggle("is-centre", pos === (axis === "x" ? W : H) / 2);
+      g.style[axis === "x" ? "left" : "top"] = hit.g + "px";
+      g.classList.toggle("is-centre", !hit.obj && hit.g === (axis === "x" ? W : H) / 2);
+      g.classList.toggle("is-object", !!hit.obj);
     };
-    mk("x", x); mk("y", y);
+    mk("x", sx); mk("y", sy);
   }
   const clearGuides = slide => $$(".guide", slide).forEach(g => g.remove());
 
@@ -1474,8 +1488,8 @@
     { name: "data-crop", on: "media", label: "Crop", values: ["cover", "contain"],
       hint: "How an image fills its slot — cover crops to fill, contain letterboxes. Toggled from the image's hover chip." },
     { name: "data-clean", group: "Slide", label: "Blank canvas", type: "flag",
-      when: ".slide--placeholder",
-      hint: "Hide the placeholder prompt and dashed frame — e.g. to stack pasted images on an empty slide." },
+      when: ".slide--placeholder, .slide--split",
+      hint: "Hide the placeholder prompt and dashed frame, or on a split slide the image half — an empty surface for pasted images and text boxes. The image itself is kept." },
   ].forEach(declareOption);
 
   function validateOption(o) {
@@ -1556,13 +1570,40 @@
     r.readAsDataURL(blob);
   });
 
+  // A standalone deck is saved with the ordinary save dialog, one shot per click: no handle is
+  // kept and nothing autosaves. A page can't remember a file between sessions, so a "saves
+  // itself" state would only be true until the tab closed. The dialog's own replace
+  // confirmation is what guards overwriting a file someone received.
+  async function saveAsFile() {
+    const h = await showSaveFilePicker({
+      suggestedName: deckFileName(), id: "slaydy-save", startIn: "documents",
+      types: [{ description: "HTML deck", accept: { "text/html": [".html"] } }],
+    });
+    const w = await h.createWritable();
+    await w.write(await serialize({ inline: true }));   // pending images are inlined here, so they stay pending
+    await w.close();
+    return h.name;
+  }
+
   async function save() {
     // a standalone deck (single file, everything inlined) saves itself as a
     // single file again — no images/ folder, assets stay baked in
     const standalone = document.documentElement.hasAttribute("data-standalone");
-    // a folder handle is no use to a standalone (and file:// pages can't keep
-    // one), so skip the picker and download the single file
-    if (standalone) { await downloadStandalone(); return true; }
+    // a folder handle is no use to a standalone: it saves through the save dialog
+    // (Safari, Firefox: a download)
+    if (standalone) {
+      if (!window.showSaveFilePicker) { await downloadStandalone(); return true; }
+      try {
+        const name = await saveAsFile();
+        toast(`Saved as ${name}.`);
+        return true;
+      } catch (err) {
+        if (err.name === "AbortError") return false;
+        console.warn(err);
+        toast("Couldn't write that file. Try another location, or use Download copy.");
+        return false;
+      }
+    }
     if (window.showDirectoryPicker) {
       try {
         if (!dirHandle) {
@@ -1588,17 +1629,22 @@
       } catch (err) {
         if (err.name === "AbortError") return false;
         console.warn(err);
+        if (dirHandle) { toast("Couldn't write to the folder — your edits are still in this tab. Use Download copy to keep them."); return false; }   // never download unasked from a background save
         toast("Folder write unavailable — falling back to a standalone download.");
       }
     }
     const blob = new Blob([await serialize({ inline: true })], { type: "text/html" });
     const a = document.createElement("a");
     a.href = URL.createObjectURL(blob);
-    a.download = "deck-edited.html";
+    a.download = deckFileName();
     a.click();
     toast("Downloaded a self-contained copy — runtime, theme and images baked in.");
     return true;
   }
+
+  // named after the deck, like standalone.py does
+  const deckFileName = (suffix = "") =>
+    ((document.title || "").replace(/[\\/:*?"<>|]/g, "").trim() || "deck") + suffix + ".html";
 
   // explicit single-file export: one .html that opens anywhere, no siblings
   async function downloadStandalone({ drop, suffix = "", done } = {}) {
@@ -1606,9 +1652,9 @@
       const blob = new Blob([await serialize({ inline: true, drop })], { type: "text/html" });
       const a = document.createElement("a");
       a.href = URL.createObjectURL(blob);
-      // name the file after the deck, like standalone.py does
-      a.download = ((document.title || "").replace(/[\\/:*?"<>|]/g, "").trim() || "deck") + suffix + ".html";
+      a.download = deckFileName(suffix);
       a.click();
+      if (!drop && !hasTarget()) { dirty = false; updateSaveUI(); }   // the changes are now in a file
       if (done) return toast(done);
       const pendingCount = $$("[data-note]").length;
       toast(pendingCount
@@ -1622,23 +1668,36 @@
 
   /* -------------------------------------------------------------- autosave */
   let dirty = false, saving = false;
+  const hasTarget = () => !!dirHandle;   // a folder being autosaved into
+  const canSaveInPlace = () => document.documentElement.hasAttribute("data-standalone") ? !!window.showSaveFilePicker : !!window.showDirectoryPicker;
   const scheduleAutosave = debounce(async () => {
-    if (!dirHandle || saving) return;
+    if (!hasTarget() || saving) return;
+    const v = deckVersion;
     saving = true; updateSaveUI();
     const ok = await save();
     saving = false;
-    if (ok) dirty = false;
+    // an edit made while the write was in flight isn't in the file: stay dirty and write again
+    if (ok && v === deckVersion) dirty = false;
     updateSaveUI();
+    if (ok && v !== deckVersion) scheduleAutosave();
   }, 1500);
 
   let deckVersion = 0;            // bumped on every edit; the presenter window refetches the deck when it changes
   const deckSession = Math.random().toString(36).slice(2);   // version restarts at 0 on reload; the session id keeps a reloaded deck distinct
   const deckV = () => deckSession + ":" + deckVersion;
+  let nudgedSave = false;
   function markDirty() {
     deckVersion++;
     dirty = true;
+    // nothing is written anywhere yet; say so once, at the first edit, with the way out
+    if (!nudgedSave && !hasTarget() && document.documentElement.hasAttribute("data-standalone") && $("#btn-save")) {
+      nudgedSave = true;
+      toast("Changes aren't saved yet.", window.showSaveFilePicker
+        ? { action: "Save…", onAction: onSaveClick, duration: 9000 }
+        : { action: "Download copy", onAction: () => downloadStandalone(), duration: 9000 });
+    }
     updateSaveUI();
-    if (dirHandle) scheduleAutosave();
+    if (hasTarget()) scheduleAutosave();
   }
 
   function updateSaveUI() {
@@ -1646,16 +1705,18 @@
     if (!el) return;
     const label = $(".js-save-label", el);
     if (!label) return;
-    if (!window.showDirectoryPicker || document.documentElement.hasAttribute("data-standalone")) { label.textContent = "Download copy"; el.classList.remove("is-status"); return; }
-    if (!dirHandle) { label.textContent = "Save…"; el.classList.remove("is-status"); return; }
+    if (!canSaveInPlace()) { label.textContent = "Download copy"; el.classList.remove("is-status", "is-warn"); return; }
+    const unsaved = dirty && !hasTarget();
+    el.classList.toggle("is-warn", unsaved);
+    if (!hasTarget()) { label.textContent = unsaved ? "Unsaved changes — Save…" : "Save…"; el.classList.remove("is-status"); return; }
     el.classList.add("is-status");
     label.textContent = saving || dirty ? "Saving…" : "Saved";
   }
 
   async function onSaveClick() {
-    if (window.showDirectoryPicker && dirHandle) return; // now a passive status, not a button
+    if (hasTarget()) return; // now a passive status, not a button
     const ok = await save();
-    if (ok) { dirty = false; updateSaveUI(); if (dirHandle) toast("Saved. Autosaving from now on."); }
+    if (ok) { dirty = false; updateSaveUI(); if (hasTarget()) toast("Saved. Autosaving from now on."); }
   }
 
   /* ------------------------------------------------------------ undo / redo */
@@ -2307,8 +2368,7 @@
       ${btn({ id: "btn-notes", icon: "notes", label: "Speaker notes", tip: "Add notes for presenter view and printed PDFs" })}
       <span class="tb-sep"></span>
       ${btn({ id: "btn-undo", icon: "undo", cls: "icon-only", key: KEY.cmd + "Z", tip: "Undo" })}
-      ${document.documentElement.hasAttribute("data-standalone") ? "" : btn({ id: "btn-single", icon: "save", label: "Download copy", key: "D", tip: "Download the deck with your changes as one self-contained .html" })}
-      <button id="btn-save" class="tb-btn" data-tip="Save changes to this file" aria-label="Save"><svg class="icon"><use href="#i-save"/></svg><span class="js-save-label">Save</span></button>
+      <button id="btn-save" class="tb-btn" data-tip="Save the deck with your changes — or, where the browser can't save a file, download a copy" aria-label="Save"><svg class="icon"><use href="#i-save"/></svg><span class="js-save-label">Save</span></button>
       <span class="tb-sep"></span>
       ${btn({ id: "btn-done", icon: "check", label: "Done", cls: "primary", tip: "Exit edit mode" })}
     `;
@@ -3005,11 +3065,12 @@
         </div>
         <div class="presenter__foot">
           <b id="pv-elapsed">00:00</b><span>elapsed</span>
+          <span class="presenter__restart" id="pv-restart"><button type="button" id="pv-restart-btn">Restart</button><span class="presenter__confirm" hidden>From slide 1? <button type="button" data-yes>Yes</button><button type="button" data-no>Cancel</button></span></span>
           <span class="presenter__spacer"></span>
           <b id="pv-count" class="presenter__count"></b>
           <span class="presenter__spacer"></span>
           <span id="pv-clock"></span>
-          <span class="presenter__keys"><kbd>→</kbd><span>next</span><kbd>R</kbd><span>reset</span><kbd>B</kbd><span>black</span></span>
+          <span class="presenter__keys"><kbd>→</kbd><span>next</span><kbd>R</kbd><span>reset timer</span><kbd>⇧R</kbd><span>restart</span><kbd>B</kbd><span>black</span></span>
         </div>
       </div>`);
   }
@@ -3047,7 +3108,7 @@
   function initPresenter() {
     document.body.classList.add("is-presenter");
     mountPresenterUI();
-    let elapsedStart = null, synced = false;
+    let elapsedStart = null, synced = false, holdClock = false;
     setInterval(() => {
       $("#pv-clock").textContent = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
       $("#pv-elapsed").textContent = elapsedStart ? fmtElapsed(Date.now() - elapsedStart) : "00:00";
@@ -3088,7 +3149,7 @@
       // an added slide, an edited note) and it asks for the current slides
       if (!synced) { synced = true; alertEl.hidden = true; renderPresenter(); return; }
       if (!changed) return;                             // heartbeat echo, nothing new
-      if (elapsedStart === null) elapsedStart = Date.now();
+      if (elapsedStart === null) { if (holdClock) holdClock = false; else elapsedStart = Date.now(); }
       renderPresenter();
     };
     chan.postMessage({ hello: true });
@@ -3105,10 +3166,31 @@
         case "arrowleft": case "pageup": e.preventDefault(); chan.postMessage({ action: "prev" }); break;
         case "home": chan.postMessage({ action: "home" }); break;
         case "end": chan.postMessage({ action: "end" }); break;
-        case "r": elapsedStart = Date.now(); break;
+        case "r": e.shiftKey ? askRestart() : (elapsedStart = Date.now()); break;
         case "b": chan.postMessage({ action: "black" }); break;
       }
     });
+    // Restart goes back to slide 1 and zeroes the clock. It is the one control that
+    // throws away the audience's place mid-talk, so past the opening it asks first
+    // (inline, not a modal: the popup is a remote control, and a dialog would steal
+    // the keys). Before the first click there is nothing to lose, so it just resets.
+    const rs = $("#pv-restart"), rsBtn = $("#pv-restart-btn"), rsAsk = $(".presenter__confirm", rs);
+    let rsTimer;
+    const closeAsk = () => { clearTimeout(rsTimer); rsAsk.hidden = true; rsBtn.hidden = false; };
+    const doRestart = () => {
+      closeAsk(); elapsedStart = null;
+      holdClock = index !== 0 || !!step;     // the echo of the jump to slide 1 isn't the talk starting
+      chan.postMessage({ action: "restart" });
+    };
+    function askRestart() {
+      if (index === 0 && !step) return doRestart();
+      rsBtn.hidden = true; rsAsk.hidden = false;
+      $("[data-yes]", rsAsk).focus();
+      rsTimer = setTimeout(closeAsk, 5000);
+    }
+    rsBtn.onclick = askRestart;
+    $("[data-yes]", rsAsk).onclick = doRestart;
+    $("[data-no]", rsAsk).onclick = closeAsk;
     // clicks mirror the deck: the current-slide frame retreats on its left
     // third and advances elsewhere, and the Next frame always advances
     const curFrame = $("#pv-current").closest(".thumb__frame");
@@ -3120,8 +3202,23 @@
     renderPresenter();
   }
   // the deck's html for the presenter, minus the live window's transient state
-  function presenterHtml() {
+  // blob: URLs belong to the document that made them — a pasted or degrained
+  // image would be a broken icon in the presenter window (always on file://,
+  // where every page is its own origin). Swap them for something portable:
+  // the original asset path when it exists on disk, else a data: URI.
+  const portableSrc = new Map();   // blob url -> data url
+  async function presenterHtml() {
     const c = deck.cloneNode(true);
+    await Promise.all($$("img", c).map(async img => {
+      const src = img.getAttribute("src") || "";
+      if (!src.startsWith("blob:")) return;
+      const rel = img.dataset.src;
+      if (rel && !pending.has(rel)) { img.setAttribute("src", rel); return; }
+      try {
+        if (!portableSrc.has(src)) portableSrc.set(src, await toDataURL(await (await fetch(src)).blob()));
+        img.setAttribute("src", portableSrc.get(src));
+      } catch { /* revoked or unreadable: leave it, the presenter shows what it can */ }
+    }));
     $$(".is-entering, .is-leaving", c).forEach(s => s.classList.remove("is-entering", "is-leaving"));
     $$(".is-sel", c).forEach(n => n.classList.remove("is-sel"));
     $$("[contenteditable], [spellcheck]", c).forEach(n => { n.removeAttribute("contenteditable"); n.removeAttribute("spellcheck"); });
@@ -3132,11 +3229,12 @@
     mainChan.onmessage = e => {
       const d = e.data;
       if (d?.hello) return syncState();
-      if (d?.need === "deck") return mainChan.postMessage({ deckHtml: presenterHtml(), v: deckV() });
+      if (d?.need === "deck") { const v = deckV(); return presenterHtml().then(deckHtml => mainChan.postMessage({ deckHtml, v })); }
       if (d?.action === "next") advance();
       else if (d?.action === "prev") retreat();
       else if (d?.action === "home") show(0, true, "fwd");
       else if (d?.action === "end") show(slides.length - 1, true, "fwd");
+      else if (d?.action === "restart") { document.body.classList.remove("is-black"); show(0, true, "fwd"); }
       else if (d?.action === "black") document.body.classList.toggle("is-black");
     };
   }
@@ -3332,7 +3430,7 @@
       if (!location.search.includes("notes")) document.body.classList.remove("show-notes");
     });
     addEventListener("beforeunload", e => {
-      if (dirty && !dirHandle) { e.preventDefault(); e.returnValue = ""; }
+      if (dirty && !hasTarget()) { e.preventDefault(); e.returnValue = ""; }
     });
 
     initBulletEditing();

@@ -32,6 +32,50 @@ Tags on an entry: **runtime** (runtime.*), **docs** (the contract docs), **skele
 changes slide layout on its own (injects content, swaps a stylesheet) should dispatch `resize` on
 `window` afterwards; that re-fits every slide.
 
+### Saving standalone decks
+**runtime, docs**
+- Standalone decks: Save… (Chrome/Edge) now opens the ordinary save dialog, suggests the deck's own name
+  and remembers the last folder; it writes once and keeps nothing, so nothing autosaves and the opened
+  file is only replaced if you pick it and confirm the OS's replace prompt. Other browsers download a
+  copy. Until saved, the button reads "Unsaved changes — Save…" in amber, the first edit shows a one-time
+  "Changes aren't saved yet" toast with a Save… action, and leaving edit mode repeats it. A download also
+  clears the unsaved state. The edit bar now has one save button; the duplicate Download copy there is gone
+  (the main bar's Download copy and `D` remain).
+- Fix (folder decks too): an edit made while an autosave was writing was marked saved; it now stays dirty
+  and saves again. A failed background folder write no longer triggers an unasked download. The fallback
+  download is named after the deck instead of `deck-edited.html`.
+
+**Forks:** Nothing required, unless you reworded the "Download copy" lines in `SKILL.fork.md`.
+
+### Sticker guides to other objects
+**runtime**
+- Dragging a sticker now also snaps to the edges and centre of other stickers, and to the edges of the
+  slide's text blocks. These guides are blue; margin and centre guides are unchanged. Alt still drags freely.
+
+**Forks:** Nothing.
+
+### Blank split halves
+**runtime, docs, attribute**
+- `data-clean` now also works on `slide--split`: it hides the image half (empty slot or picture; the
+  picture stays in the file) so stickers and text boxes can sit there. Options panel: "Blank canvas".
+
+**Forks:** Nothing.
+
+### Restart in presenter view
+**runtime**
+- A Restart button (and Shift+R) returns the deck to slide 1 and zeroes the clock, asking first unless it
+  is already at the start. `R` still only resets the timer.
+
+**Forks:** `Shift+R` in presenter view is now taken.
+
+### Images no longer break in presenter view
+**runtime**
+- Fix: images pasted into a slot or sticker, and SVGs the runtime de-grains at boot, showed as broken
+  icons in presenter view (their `blob:` URLs don't cross windows, and never on `file://`). The deck
+  copy sent to the presenter now carries the original path or a data: URI instead.
+
+**Forks:** Nothing.
+
 ### `C` copies the current slide as a PNG
 **runtime** — A single-key shortcut for the Copy slide as PNG item; listed in the Export menu and
 the `?` sheet. Ignored with Cmd/Ctrl/Alt held and while typing.

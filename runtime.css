@@ -1091,6 +1091,10 @@ body.is-editing .pin.is-sel { outline: 2px solid #fff; outline-offset: 2px; }
    stack stickers on — prompt and dashed frame get out of the way */
 .slide--placeholder[data-clean] { border-color: transparent; }
 .slide--placeholder[data-clean] .slide__placeholder-note { display: none; }
+/* ...and on a split slide it blanks the image half: the picture (or its empty
+   slot) is hidden but kept in the file, so the option can be switched back off.
+   The column stays, so the text doesn't jump. */
+.slide--split[data-clean] .split__media { visibility: hidden; pointer-events: none; }
 .slide__placeholder-note {
   display: flex; flex-direction: column; align-items: center; gap: 10px;
   max-width: 32ch;
@@ -1159,6 +1163,8 @@ html:fullscreen body.is-idle { cursor: none; }
 .tb-btn.primary .icon { stroke: var(--accent-fg); }
 .tb-btn.is-status { cursor: default; color: rgba(246, 245, 243, .55); }
 .tb-btn.is-status:hover { background: none; }
+.tb-btn.is-warn { color: #ffb020; }
+.tb-btn.is-warn .icon { color: #ffb020; }
 .tb-count {
   font: 500 13px/1 var(--font-mono); font-variant-numeric: tabular-nums;
   min-width: 66px; text-align: center; color: rgba(246, 245, 243, .7);
@@ -1334,6 +1340,7 @@ html:fullscreen body.is-idle { cursor: none; }
 }
 .menu-item:hover, .menu-item:focus-visible { background: rgba(255, 255, 255, .08); outline: none; }
 .menu-item .icon { width: 16px; height: 16px; opacity: .7; }
+.js-save-label { max-width: 190px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .menu-item kbd { margin-left: auto; opacity: .45; font: 500 11px/1 var(--font-body); }
 .btn {
   height: 34px; padding: 0 14px; border-radius: 9px; border: 1px solid rgba(255, 255, 255, .14);
@@ -1564,6 +1571,7 @@ body.is-editing .sticker.is-sel { outline: 2px solid var(--accent); outline-offs
 .guide[data-axis="x"] { top: 0; bottom: 0; width: 1px; margin-left: -.5px; }
 .guide[data-axis="y"] { left: 0; right: 0; height: 1px; margin-top: -.5px; }
 .guide.is-centre { background: var(--accent); }
+.guide.is-object { background: #35c8ff; }   /* aligned with another object on the slide, not the slide itself */
 @media print { .guide { display: none; } }
 .handle {
   position: absolute; width: 12px; height: 12px; z-index: 5;
@@ -1710,6 +1718,12 @@ body.is-black::after { content: ""; position: fixed; inset: 0; background: #000;
 .presenter__foot b { font: 600 34px/1 var(--font-display); letter-spacing: -.02em; color: #f6f5f3; font-variant-numeric: tabular-nums; }
 .presenter__foot .presenter__count { font-size: 22px; }
 .presenter__spacer { flex: 1; }
+.presenter__restart { display: flex; align-items: center; gap: 8px; }
+.presenter__restart button { font: 500 12px/1 var(--font-body); padding: 6px 10px; border-radius: 6px; border: 1px solid rgba(255, 255, 255, .16); background: transparent; color: rgba(246, 245, 243, .75); cursor: pointer; }
+.presenter__restart button:hover, .presenter__restart button:focus-visible { background: rgba(255, 255, 255, .1); color: #f6f5f3; }
+.presenter__restart [data-yes] { background: var(--accent, #ff5a1f); border-color: transparent; color: #fff; }
+.presenter__confirm { display: flex; align-items: center; gap: 8px; white-space: nowrap; }
+.presenter__confirm[hidden], #pv-restart-btn[hidden] { display: none; }
 .presenter__keys { display: flex; align-items: center; gap: 8px; }
 .presenter__keys kbd { font: 500 12px/1 var(--font-mono); padding: 4px 7px; border-radius: 5px; background: rgba(255, 255, 255, .08); color: rgba(246, 245, 243, .7); }
 
