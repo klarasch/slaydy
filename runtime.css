@@ -1933,6 +1933,8 @@ body.is-black::after { content: ""; position: fixed; inset: 0; background: #000;
     height: auto; min-height: var(--slide-h); overflow: visible;
     break-after: auto; page-break-after: auto;
   }
+  /* the slide's data-fit zoom is for its content, not the notes under it */
+  body.show-notes .slide[data-fit] > .notes { zoom: 1 !important; }
   body.show-notes .notes {
     display: block; position: static;
     margin: 20px 0 50px; padding-top: 20px;

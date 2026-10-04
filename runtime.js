@@ -335,6 +335,9 @@
     if (changing) {
       const prevSlide = slides[from];
       const tx = effectiveTx(cur);
+      // fit the arriving slide while it is still at rest, so it enters at its
+      // final size; the call at the end of show() waits for the transition
+      measureOverflow(cur);
       slides.forEach(s => { if (s !== cur && s !== prevSlide) s.classList.remove("is-active", "is-entering", "is-leaving"); });
 
       if (prevSlide && prevSlide !== cur) {
@@ -2400,7 +2403,7 @@
       const cur = embedded.find(s => s.media !== "not all")?.dataset.theme;
       const nextTheme = names[(names.indexOf(cur) + 1) % names.length];
       embedded.forEach(s => s.media = s.dataset.theme === nextTheme ? "" : "not all");
-      readDeckPad(); fit();
+      readDeckPad(); fit(); measureAll();
       toast(`Theme: ${nextTheme}`);
       if (overviewOpen) buildOverview();
       return;
@@ -2412,7 +2415,7 @@
     const nextTheme = THEMES[(THEMES.indexOf(cur) + 1) % THEMES.length];
     link.setAttribute("href", `themes/${nextTheme}.css`);
     // the new theme may declare a different --deck-pad — refit once it loads
-    link.addEventListener("load", () => { readDeckPad(); fit(); }, { once: true });
+    link.addEventListener("load", () => { readDeckPad(); fit(); measureAll(); }, { once: true });
     toast(`Theme: ${nextTheme}`);
     if (overviewOpen) buildOverview();
   }
@@ -2931,16 +2934,40 @@
     // offsetTop/Height/Left/Width come back in the element's own zoomed units in
     // current Chrome, so the data-fit zoom would cancel itself out. Measure
     // with bounding rects instead, un-scaled by the stage's transform.
+    // Bounding rects also carry the child's own transform, which is not layout:
+    // an un-revealed step rests 10px low. Take its translation back out.
     const sr = slide.getBoundingClientRect();
     const k = sr.width / slide.offsetWidth || 1;
-    const bottom = c => (c.getBoundingClientRect().bottom - sr.top) / k - slide.clientTop;
-    const right = c => (c.getBoundingClientRect().right - sr.left) / k - slide.clientLeft;
+    const shift = c => {
+      const t = getComputedStyle(c).transform;
+      if (!t || t === "none") return { x: 0, y: 0 };
+      const m = new DOMMatrix(t), z = c.currentCSSZoom || 1;
+      return { x: m.e * z, y: m.f * z };
+    };
+    const bottom = c => (c.getBoundingClientRect().bottom - sr.top) / k - slide.clientTop - shift(c).y;
+    const right = c => (c.getBoundingClientRect().right - sr.left) / k - slide.clientLeft - shift(c).x;
     const vOverflow = bottom(kids[kids.length - 1]) > limitH + 1;
     const hOverflow = kids.some(c => right(c) > limitW + 1);
     return vOverflow || hOverflow;
   }
+  // A slide that is entering or leaving, or whose content is still running an
+  // entrance animation, has its children moved by transforms, and measuring it
+  // then reads the motion as overflow. Never-ending animations don't count.
+  function inMotion(slide) {
+    if (slide.classList.contains("is-entering") || slide.classList.contains("is-leaving")) return true;
+    return !!slide.getAnimations && slide.getAnimations({ subtree: true }).some(a =>
+      a.effect && a.effect.target && a.effect.target.parentElement === slide &&
+      a.playState !== "finished" && a.playState !== "idle" &&
+      isFinite(a.effect.getComputedTiming().endTime));
+  }
   function measureOverflow(slide) {
     if (!slide) return;
+    // print lays slides out differently (notes under them, auto height); the
+    // PDF must carry the fit the screen settled on, so never re-fit there
+    if (matchMedia("print").matches) return;
+    // in motion: keep the last result and come back once it has settled
+    clearTimeout(slide._fitTimer);
+    if (inMotion(slide)) { slide._fitTimer = setTimeout(() => measureOverflow(slide), 120); return; }
     slide.removeAttribute("data-fit");
     slide.removeAttribute("data-overflow");
     for (const f of [0.95, 0.9, 0.85, 0.8]) {
@@ -3298,7 +3325,8 @@
     });
     armIdle();
 
-    addEventListener("beforeprint", () => toggleOverview(false));
+    // re-fit every slide first: one never visited since a late font or image may be stale
+    addEventListener("beforeprint", () => { toggleOverview(false); measureAll(); });
     addEventListener("afterprint", () => {
       // show-notes set by the export popover is one-shot; ?notes in the URL keeps it
       if (!location.search.includes("notes")) document.body.classList.remove("show-notes");
@@ -3356,6 +3384,9 @@
     };
     measureAll();
     document.fonts?.ready?.then(measureAll);
+    // fonts.ready settles once; a face first needed later (a theme switch, an
+    // edit that brings in a new weight) reflows text after it
+    document.fonts?.addEventListener?.("loadingdone", debounce(measureAll, 100));
     initMainChannel();
   }
 

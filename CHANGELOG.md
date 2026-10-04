@@ -14,6 +14,24 @@ Tags on an entry: **runtime** (runtime.*), **docs** (the contract docs), **skele
 
 ## 2026-10-04
 
+### Overflow guard no longer measures slides in motion
+**runtime**
+- Since the switch to bounding rects, a slide measured while its content was still animating in
+  was read as overflowing: the `rise` offset, a `push` or `zoom` entrance, or an un-revealed step
+  resting 10px low. A bottom-anchored slide (the title) could not be shrunk out of it, so it was
+  flagged "Too much text" until the next visit. Late web fonts, an image load or a resize landing
+  inside the entrance triggered it; a `push` deck hit it on every arrival.
+- The guard now fits the arriving slide before its entrance starts, holds any measurement asked for
+  mid-transition until the slide has settled, and takes a child's own translation back out.
+- Every slide is re-fitted when a web font finishes loading at any point (not only the first
+  `fonts.ready`), after a theme switch, and just before printing. Nothing is re-fitted while print
+  styles are active, so the PDF carries exactly the fit the screen settled on.
+- Printed with speaker notes, the notes under a shrunk slide are no longer shrunk with it.
+
+**Forks:** nothing. Drop any workaround that re-measured after a delay. A brand extension that
+changes slide layout on its own (injects content, swaps a stylesheet) should dispatch `resize` on
+`window` afterwards; that re-fits every slide.
+
 ### `C` copies the current slide as a PNG
 **runtime** — A single-key shortcut for the Copy slide as PNG item; listed in the Export menu and
 the `?` sheet. Ignored with Cmd/Ctrl/Alt held and while typing.
