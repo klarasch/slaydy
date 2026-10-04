@@ -3017,7 +3017,7 @@
     if (slide.classList.contains("is-entering") || slide.classList.contains("is-leaving")) return true;
     return !!slide.getAnimations && slide.getAnimations({ subtree: true }).some(a =>
       a.effect && a.effect.target && a.effect.target.parentElement === slide &&
-      a.playState !== "finished" && a.playState !== "idle" &&
+      a.playState === "running" &&     // a paused one may never end
       isFinite(a.effect.getComputedTiming().endTime));
   }
   function measureOverflow(slide) {
