@@ -2283,7 +2283,7 @@
       <span class="tb-sep"></span>
       ${showTheme ? btn({ id: "btn-theme", icon: "theme", label: "Theme", key: "T", tip: "Switch light/dark theme" }) : ""}
       ${btn({ id: "btn-presenter", icon: "present", label: "Presenter", key: "S", tip: "Open presenter view with speaker notes" })}
-      ${btn({ id: "btn-print", icon: "pdf", label: "Export PDF", key: "P", tip: "Print or save the deck as a PDF" })}
+      ${btn({ id: "btn-print", icon: "pdf", label: "Export", key: "P", tip: "Export — PDF, or this slide as a PNG" })}
       ${btn({ id: "btn-single", icon: "save", label: "Download copy", key: "D", tip: "Download the deck with your changes as one self-contained .html" })}
       <span class="tb-sep"></span>
       ${btn({ id: "btn-edit", icon: "edit", label: "Edit", key: "E", tip: "Switch to edit mode" })}
@@ -2318,7 +2318,7 @@
     if (!editing) {
       $("#btn-theme")?.addEventListener("click", cycleTheme);
       $("#btn-presenter").onclick = openPresenter;
-      $("#btn-print").onclick = e => exportPDF(e.currentTarget);
+      $("#btn-print").onclick = e => exportMenu(e.currentTarget);
       $("#btn-edit").onclick = () => toggleEdit();
       $("#btn-help").onclick = () => toggleShortcuts();
     } else {
@@ -2547,6 +2547,173 @@
       };
     }
   }
+  /* ------------------------------------------------------------- slide as PNG */
+  // The slide is cloned into an SVG <foreignObject>, drawn to a canvas and encoded. An SVG
+  // loaded as an <img> sees none of the document's styles or fonts, so the page's CSS travels
+  // with it, fonts and images as data: URIs, and html / body / :root selectors are retargeted
+  // at wrapper divs that carry the same attributes. Chromium-first; Safari renders
+  // foreignObject less faithfully.
+  const IMG_SCALE = 2;
+  const imgAssets = new Map();
+  const fetchDataURL = url => {
+    if (!imgAssets.has(url)) imgAssets.set(url, fetch(url).then(r => {
+      if (!r.ok) throw new Error(r.status);
+      return r.blob();
+    }).then(toDataURL));
+    return imgAssets.get(url);
+  };
+  async function inlineAllURLs(css, base, failed) {
+    const urls = new Set();
+    css.replace(CSS_URL, (m, q, u) => { if (!u.startsWith("data:") && !/#|%23/.test(u)) urls.add(u); });   // %23: a fragment inside an inline SVG
+    const map = new Map();
+    await Promise.all([...urls].map(async u => {
+      try { map.set(u, await fetchDataURL(new URL(u, base).href)); } catch { failed.add(u); }
+    }));
+    return css.replace(CSS_URL, (m, q, u) => map.has(u) ? `url("${map.get(u)}")` : m);
+  }
+  async function pageCSS(failed) {
+    const parts = [];
+    for (const sheet of [...document.styleSheets]) {
+      if (sheet.disabled || sheet.media.mediaText === "not all") continue;
+      let text;
+      try { text = [...sheet.cssRules].map(r => r.cssText).join("\n"); }
+      catch { try { text = await (await fetch(sheet.href)).text(); } catch { failed.add(sheet.href); continue; } }
+      text = text.replace(/:root\b/g, ".x-html")
+        .replace(/(^|[\s,{}>+~(])html(?![\w-])/g, "$1.x-html")
+        .replace(/(^|[\s,{}>+~(])body(?![\w-])/g, "$1.x-body");
+      parts.push(await inlineAllURLs(text, sheet.href || location.href, failed));
+    }
+    return parts.join("\n");
+  }
+
+  async function slideSVG(slide) {
+    const failed = new Set();
+    await document.fonts.ready;
+    const css = await pageCSS(failed);
+    const clone = slide.cloneNode(true);
+    clone.classList.remove("is-entering", "is-leaving");
+    clone.classList.add("is-active");
+    clone.querySelectorAll(".guide, .badge, .slide__overflow-badge, .media-hover, .handle, .slide__placeholder-note, aside.notes")
+      .forEach(n => n.remove());
+    [clone, ...clone.querySelectorAll("[contenteditable]")].forEach(n => {
+      n.removeAttribute("contenteditable"); n.removeAttribute("spellcheck");
+    });
+    clone.querySelectorAll(".is-sel").forEach(n => n.classList.remove("is-sel"));
+    clone.querySelectorAll("[data-step]").forEach(n => n.classList.add("is-revealed"));
+    // an in-flight count-up must not freeze mid-number in the image
+    const live = slide.querySelectorAll('[data-animate="count"]');
+    clone.querySelectorAll('[data-animate="count"]').forEach((n, i) => {
+      if (live[i]?._countRaf) n.textContent = countOriginal.get(live[i]) ?? n.textContent;
+    });
+    await Promise.all([...clone.querySelectorAll("img")].map(async img => {
+      const src = img.dataset.src || img.getAttribute("src");
+      if (!src || src.startsWith("data:")) return;
+      try { img.setAttribute("src", await fetchDataURL(new URL(src, location.href).href)); }
+      catch { failed.add(src); }
+    }));
+    await Promise.all([clone, ...clone.querySelectorAll("[style*='url(']")].map(async n => {
+      const st = n.getAttribute("style");
+      if (st?.includes("url(")) n.setAttribute("style", await inlineAllURLs(st, location.href, failed));
+    }));
+
+    const XHTML = "http://www.w3.org/1999/xhtml";
+    const el = (cls, from) => {
+      const d = document.createElementNS(XHTML, "div");
+      for (const a of from?.attributes || []) if (a.name !== "class" && a.name !== "id") d.setAttribute(a.name, a.value);
+      d.setAttribute("class", cls);
+      return d;
+    };
+    const root = el([...document.documentElement.classList, "x-html"].join(" "), document.documentElement);
+    root.style.cssText += `width:${W}px;height:${H}px;margin:0;position:relative;overflow:hidden;--slide-radius:0px;`;
+    const keep = [...document.body.classList].filter(c => c === "is-ready" || !/^(is-|has-|show-)/.test(c));
+    const bodyEl = el([...keep, "is-ready", "x-body"].join(" "), document.body);
+    bodyEl.removeAttribute("data-dir");
+    bodyEl.style.cssText += `width:${W}px;height:${H}px;margin:0;overflow:hidden;position:relative;background:none;`;
+    const deckEl = el(deck.className, deck);
+    deckEl.style.cssText += `position:absolute;left:0;top:0;transform:none;box-shadow:none;`;
+    deckEl.append(clone);
+    bodyEl.append(deckEl);
+    const style = document.createElementNS(XHTML, "style");
+    // a still image: no entrance animation may be caught at its first frame
+    style.textContent = css + "\n.x-html *, .x-html *::before, .x-html *::after { animation: none !important; transition: none !important; }";
+    root.append(style, bodyEl);
+    const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+    svg.setAttribute("width", W); svg.setAttribute("height", H); svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
+    const fo = document.createElementNS("http://www.w3.org/2000/svg", "foreignObject");
+    fo.setAttribute("width", W); fo.setAttribute("height", H);
+    fo.append(root); svg.append(fo);
+    return { svg: new XMLSerializer().serializeToString(svg), failed };
+  }
+
+  // resolves to { blob, failed } — failed lists assets that could not be inlined
+  async function slidePNG(slide, scale = IMG_SCALE) {
+    const { svg, failed } = await slideSVG(slide);
+    const img = new Image();
+    img.decoding = "sync";
+    const loaded = new Promise((res, rej) => { img.onload = res; img.onerror = () => rej(new Error("the slide could not be drawn")); });
+    img.src = "data:image/svg+xml;charset=utf-8," + encodeURIComponent(svg);
+    await loaded;
+    try { await img.decode(); } catch {}
+    const canvas = document.createElement("canvas");
+    canvas.width = W * scale; canvas.height = H * scale;
+    const ctx = canvas.getContext("2d");
+    ctx.scale(scale, scale);
+    ctx.drawImage(img, 0, 0);
+    const blob = await new Promise((res, rej) => canvas.toBlob(b => b ? res(b) : rej(new Error("the image could not be encoded")), "image/png"));
+    return { blob, failed };
+  }
+  const warnFailed = failed => failed.size && (console.warn("[slaydy] not inlined into the PNG:", [...failed]),
+    toast(`${failed.size} asset${failed.size > 1 ? "s" : ""} (fonts or images) could not be included — open the deck from a server or export a standalone copy first.`, { duration: 7000 }));
+
+  async function downloadSlidePNG() {
+    try {
+      toast("Rendering slide…", { duration: 8000 });
+      const { blob, failed } = await slidePNG(slides[index]);
+      const a = document.createElement("a");
+      const name = (document.title || "deck").replace(/[\\/:*?"<>|]/g, "").trim() || "deck";
+      a.href = URL.createObjectURL(blob);
+      a.download = `${name} - slide ${index + 1}.png`;
+      document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+      failed.size ? warnFailed(failed) : toast("Slide saved as PNG.");
+    } catch (e) { console.error(e); toast("PNG export failed: " + e.message); }
+  }
+  async function copySlidePNG() {
+    if (!navigator.clipboard?.write || typeof ClipboardItem === "undefined") {
+      toast("Copying images isn't available here — downloading instead.");
+      return downloadSlidePNG();
+    }
+    try {
+      toast("Rendering slide…", { duration: 8000 });
+      let failed;
+      // the promise goes in synchronously: Safari only honours the user gesture that way
+      const item = new ClipboardItem({ "image/png": slidePNG(slides[index]).then(r => (failed = r.failed, r.blob)) });
+      await navigator.clipboard.write([item]);
+      failed.size ? warnFailed(failed) : toast("Slide copied as PNG.");
+    } catch (e) { console.error(e); toast("Copy failed: " + e.message); }
+  }
+
+  function exportMenu(anchor) {
+    if ($("#export-pop")) return closePopover();
+    closePicker();
+    popAnchor = anchor || null;
+    $("#pop-layer").innerHTML = `
+      <div class="pop pop--menu" id="export-pop">
+        <button class="menu-item" data-act="pdf"><svg class="icon"><use href="#i-pdf"/></svg>PDF<kbd>P</kbd></button>
+        <button class="menu-item" data-act="copy"><svg class="icon"><use href="#i-dup"/></svg>Copy slide as PNG</button>
+        <button class="menu-item" data-act="png"><svg class="icon"><use href="#i-image"/></svg>Download slide as PNG</button>
+      </div>`;
+    positionPopover($("#export-pop"), anchor);
+    $("#export-pop").onclick = e => {
+      const act = e.target.closest("[data-act]")?.dataset.act;
+      if (!act) return;
+      closePopover();
+      if (act === "pdf") exportPDF(anchor);
+      else if (act === "copy") copySlidePNG();
+      else downloadSlidePNG();
+    };
+  }
+
   // PDF export: pages are 16:9 by @page rule in Chromium; Safari ignores
   // @page size and prints on the dialog's paper, so it always gets the
   // popover with steps for a custom 16:9 paper size. When the deck carries
