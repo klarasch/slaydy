@@ -19,6 +19,21 @@ the named thing has something to do or to delete), **port** (every fork has to a
 
 ## 2026-10-05
 
+### The lint can be told what a brand's own markup is
+**docs, feature, fix**
+- A fork-owned `lint.json` beside `standalone.py` declares the inline custom properties its
+  layouts read (`"inline_properties": ["--x", "--y"]`), the class it gives a layout's repeated
+  unit (`"units": {"bento": "bento-tile"}`, optionally with `min` and `max`), layouts to leave
+  alone (`"skip"`), and can turn the lint off (`"enabled": false`). `CUSTOMIZING.md`, Layer 4.
+- Safer without any declaration: an inline custom property is a `check` line, not a `fix`, and
+  so is a stock layout with none of its stock units inside it ("0 cells", "0 steps"). A real CSS
+  property or a theme token set inline is still a `fix`.
+- `standalone.py --no-lint` builds without linting.
+
+**Forks:** check. A fork whose layouts use inline custom properties or its own cell and step
+classes should add a `lint.json`; until it does, those show up as `check` lines only. Drop any
+sentence in `themes/<name>.md` that told Claude to ignore such lint lines.
+
 ### A hook for standalone.py, and minified files judged by content
 **runtime, docs, feature, fix**
 - `standalone.py` has an extension point, the twin of the browser's `slaydy:serialize`: a

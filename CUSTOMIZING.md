@@ -258,6 +258,8 @@ came to implement an asset-baking hook locally after upstream had already shippe
 | `slaydy.snapshot()` `slaydy.toast()` | undoable extension edits; the runtime's message UI | JS |
 | `slaydy.serialize({ inline })` | the deck as a string, folder-relative or single-file | JS |
 | `data-gen` `data-runtime` `data-runtime="print"` | mark injected DOM so saves strip it; keep print-only chrome | attributes |
+| `standalone_hook.py` | add to the single-file bundle what the Python export can't see | Python, Layer 3 |
+| `lint.json` | tell the lint about your own markup: inline custom properties, a layout's unit class | JSON, Layer 4 |
 | `data-style` `data-custom` | per-slide styling hook; hand-over the runtime leaves alone | attributes, `LAYOUTS.md` "Custom content" |
 
 ## Layer 4 — your own layouts
@@ -272,6 +274,37 @@ Add layouts without touching the runtime:
 
 The add-slide picker in the browser won't show custom layouts (it's runtime UI), but Claude
 will generate and revise them, and users can duplicate one to make more.
+
+**Tell the lint about them.** `standalone.py` lints every deck it builds, and Claude clears its
+`fix` lines before handing a deck over, so a line that is wrong for your markup is an
+instruction to damage it. Out of the box the lint is careful with markup it does not recognise:
+an inline custom property (`style="--x: 168"`) and a stock layout with none of its stock units
+inside it only get a `check` line. Declare them in a `lint.json` beside `standalone.py` and they
+are accepted, and counted, outright. The file is yours; every key is optional:
+
+```json
+{
+  "inline_properties": ["--x", "--y", "--v", "--tl-count"],
+  "units": {
+    "bento": { "class": "bento-tile", "min": 3, "max": 6 },
+    "timeline": "tl-node"
+  },
+  "skip": ["callout"],
+  "enabled": true
+}
+```
+
+- `inline_properties`: custom properties your layouts read from an inline style. Names only.
+  A real CSS property (`color:`, `font-size:`) or a theme token (`--accent`) set inline stays a
+  `fix`, declared or not.
+- `units`: the class you give a layout's repeated unit (bento cells, timeline steps, cards,
+  stats, compare columns) when it is not the stock one, and optionally how many the layout takes.
+- `skip`: layouts whose budgets and counts the lint leaves alone entirely.
+- `enabled`: `false` turns the lint off for this install. `standalone.py --no-lint` does it for
+  one build.
+
+A layout of your own (`slide--<yours>`) needs no entry: the lint knows it from your stylesheet
+and applies no budgets to it.
 
 ## What not to do
 

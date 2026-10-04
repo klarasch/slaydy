@@ -13,6 +13,7 @@ the same job.
 
 Usage:  python3 standalone.py path/to/deck.html [out.html]
         python3 standalone.py --lint path/to/deck.html
+        python3 standalone.py --no-lint path/to/deck.html [out.html]
         python3 standalone.py --explode path/to/standalone.html [out.html]
 
 Build writes one file next to the deck, named after the deck's <title> (or
@@ -26,7 +27,8 @@ runtime.js).
 Build lints the deck first (density budgets, deck structure, what the tier
 asks for, markup the skill forbids) and prints what it finds; the file is
 written either way. --lint does only that, and exits 1 when anything needs
-fixing.
+fixing. --no-lint builds without it. A fork tells the lint about its own
+markup in a lint.json beside this script (see lint_config below).
 
 Explode is the inverse, for revising a deck when only the standalone file
 exists: inlined images come out as files in images/ (byte-identical files
@@ -35,7 +37,7 @@ bundled stylesheet and runtime come out as bundle.css / bundle.js, and the
 result (deck-work.html by default) is a small, grep-able markup file that
 build accepts straight back. Base64 never passes through a revision.
 """
-import base64, hashlib, importlib.util, math, mimetypes, re, sys
+import base64, hashlib, importlib.util, json, math, mimetypes, re, sys
 from html.parser import HTMLParser
 from pathlib import Path
 from urllib.parse import unquote_to_bytes
@@ -201,10 +203,57 @@ HEADLINE = {"title": 8, "section": 4, "statement": 12, "bullets": 8, "split": 8,
 REVEALS = {"bullets": ("ul", "ol"), "cards": ("cards",), "stats": ("stats",), "bento": ("bento",),
            "compare": ("compare",), "timeline": ("timeline",), "table": ("tbody",)}
 SEPARATOR = re.compile(r"[·•|]|\s[—–/]\s")
+# the repeated unit each grid layout counts: class, fewest, most
+UNITS = {"cards": ("card", 3, 3), "bento": ("cell", 5, 5), "stats": ("stat", 3, 3),
+         "compare": ("col", 2, 2), "timeline": ("step", 3, 5)}
+THEME_TOKENS = {"--app-bg", "--bg", "--fg", "--muted", "--faint", "--surface", "--accent", "--accent-2",
+                "--accent-fg", "--wash-opacity", "--font-display", "--font-body", "--font-mono", "--pad"}
+LINT_KEYS = {"enabled", "inline_properties", "units", "skip"}
+
+
+def lint_config() -> dict:
+    """What an install declares about its own markup, read from a fork-owned
+    lint.json beside this script. Every key is optional:
+
+        {
+          "enabled": true,
+          "inline_properties": ["--x", "--y", "--v"],
+          "units": { "bento": "bento-tile",
+                     "timeline": { "class": "tl-node", "min": 3, "max": 6 } },
+          "skip": ["callout"]
+        }
+
+    inline_properties — custom properties the install's layouts read from an
+    inline style (a position, a size, a count). They are values, not styling,
+    and are accepted where named here; a real CSS property never is.
+    units — the class an install gives a layout's repeated unit (cells, steps,
+    cards, columns, figures) when it is not the stock one, optionally with how
+    many the layout takes.
+    skip — layouts whose budgets and counts the lint leaves alone entirely.
+    enabled — false turns the lint off for this install."""
+    f = Path(__file__).resolve().parent / "lint.json"
+    if not f.is_file():
+        return {}
+    try:
+        cfg = json.loads(f.read_text(encoding="utf-8"))
+    except ValueError as e:
+        raise ValueError(f"lint.json is not valid JSON ({e})") from None
+    unknown = set(cfg) - LINT_KEYS if isinstance(cfg, dict) else {"(not an object)"}
+    if unknown:
+        raise ValueError(f"lint.json: unknown key {', '.join(sorted(unknown))} — the keys are {', '.join(sorted(LINT_KEYS))}")
+    return cfg
 
 
 def lint(html: str, folder: Path) -> list[tuple[str, str]]:
     """Return (level, message) pairs for a folder deck's markup."""
+    cfg = lint_config()
+    allowed_props = set(cfg.get("inline_properties", []))
+    skip = set(cfg.get("skip", []))
+    units = dict(UNITS)
+    for layout, u in cfg.get("units", {}).items():
+        u = u if isinstance(u, dict) else {"class": u}
+        _, lo, hi = UNITS.get(layout, ("", 1, 99))
+        units[layout] = (u["class"].lstrip("."), u.get("min", lo), u.get("max", hi))
     tree = Tree()
     tree.feed(html)
     every = list(tree.root.walk())
@@ -282,73 +331,99 @@ def lint(html: str, folder: Path) -> list[tuple[str, str]]:
                 want = str(lo) if lo == hi else f"{lo}–{hi}"
                 fix(f"{at}: {plural(len(nodes), what)}, the layout takes {want}")
 
-        heads = [n for n in inside if n.tag in ("h1", "h2") or (k == "callout-full" and n.tag == "h3")]
-        if k in HEADLINE:
-            cap(heads[:1], HEADLINE[k], "headline")
-        cap(by_cls("lead"), 20, "lead")
-        items = by_tag("li")
-        nums = by_cls("stat__num")
-        if k == "bullets":
-            count(items, 1, 5, "item"); cap(items, 14, "item")
-        elif k == "agenda":
-            count(items, 1, 10, "item"); cap(by_cls("t") or items, 6, "item")
-        elif k == "cards":
-            count(by_cls("card"), 3, 3, "card"); cap(by_cls("h3"), 4, "card title"); cap(by_cls("body"), 25, "card body")
-        elif k == "bento":
-            count(by_cls("cell"), 5, 5, "cell"); cap(by_cls("h3"), 3, "cell title"); cap(by_cls("body"), 14, "cell body")
-            cap(nums, 6, "number", "character")
-        elif k == "stats":
-            count(by_cls("stat"), 3, 3, "figure"); cap(nums, 6, "number", "character"); cap(by_cls("body"), 12, "stat body")
-        elif k == "number":
-            cap(nums, 7, "number", "character")
-        elif k == "compare":
-            cols = by_cls("col")
-            count(cols, 2, 2, "column"); cap(by_cls("h3"), 3, "column title"); cap(items, 10, "item")
-            for c in cols:
-                n_items = [n for n in c.walk(_ignored) if n.tag == "li"]
-                if len(n_items) > 4:
-                    fix(f"{at}: a column has {len(n_items)} items, limit 4")
-        elif k == "table":
-            rows = by_tag("tr")
-            body_rows = [r for r in rows if r.parent and r.parent.tag == "tbody"]
-            widest = max((len([c for c in r.kids if isinstance(c, Node)]) for r in rows), default=0)
-            if widest > 5:
-                fix(f"{at}: {widest} columns, limit 5")
-            if len(body_rows) > 6:
-                fix(f"{at}: {len(body_rows)} body rows, limit 6")
-            cap(by_tag("td"), 6, "cell"); cap(by_tag("th"), 3, "header")
-        elif k == "timeline":
-            count(by_cls("step"), 3, 5, "step"); cap(by_cls("caption"), 3, "step caption")
-            cap(by_cls("h3"), 3, "step title"); cap(by_cls("body"), 8, "step body")
-        elif k in ("callout", "callout-full"):
-            pins = by_cls("pin")
-            if len(pins) > (6 if k == "callout" else 5):
-                fix(f"{at}: {len(pins)} pins, limit {6 if k == 'callout' else 5}")
-            if len(pins) != len(items):
-                fix(f"{at}: {plural(len(pins), 'pin')} but {plural(len(items), 'note')} — they pair by order")
-            cap(items, 12 if k == "callout" else 10, "note")
-        elif k == "split":
-            body = by_cls("split__body")
-            total = sum(words(p) for b in body for p in b.walk(_ignored) if p.tag == "p")
-            if total > 60:
-                fix(f"{at}: body is {total} words, limit 60")
-        elif k == "quote":
-            cap(by_tag("blockquote"), 30, "quotation"); cap(by_tag("figcaption"), 12, "attribution")
-        elif k == "image":
-            cap(by_cls("credit"), 12, "credit")
-        elif k == "gallery":
-            count([n for g in by_cls("gallery") for n in g.kids if isinstance(n, Node) and n.tag == "figure"], 2, 4, "image")
-        elif k == "code":
-            for pre in by_tag("pre"):
-                lines = pre.text().strip("\n").split("\n")
-                if len(lines) > 14:
-                    fix(f"{at}: {len(lines)} lines of code, limit 14")
-                if max(map(len, lines), default=0) > 60:
-                    fix(f"{at}: a code line is {max(map(len, lines))} characters, limit 60")
+        def unit(what):
+            """The layout's repeated unit, counted. None of the stock class at all
+            usually means the install marks this layout up its own way, which is
+            its right: say how to declare it instead of asking for a rebuild."""
+            c, lo, hi = units[k]
+            nodes = by_cls(c)
+            if not nodes and k not in cfg.get("units", {}):
+                check(f"{at}: no .{c} inside it, so nothing was counted — if this install marks up "
+                      f"{k} its own way, name the class under \"units\" in lint.json (CUSTOMIZING.md)")
+            else:
+                count(nodes, lo, hi, what)
+            return nodes
+
+        if k not in skip:
+            heads = [n for n in inside if n.tag in ("h1", "h2") or (k == "callout-full" and n.tag == "h3")]
+            if k in HEADLINE:
+                cap(heads[:1], HEADLINE[k], "headline")
+            cap(by_cls("lead"), 20, "lead")
+            items = by_tag("li")
+            nums = by_cls("stat__num")
+            if k == "bullets":
+                count(items, 1, 5, "item"); cap(items, 14, "item")
+            elif k == "agenda":
+                count(items, 1, 10, "item"); cap(by_cls("t") or items, 6, "item")
+            elif k == "cards":
+                unit("card"); cap(by_cls("h3"), 4, "card title"); cap(by_cls("body"), 25, "card body")
+            elif k == "bento":
+                unit("cell"); cap(by_cls("h3"), 3, "cell title"); cap(by_cls("body"), 14, "cell body")
+                cap(nums, 6, "number", "character")
+            elif k == "stats":
+                unit("figure"); cap(nums, 6, "number", "character"); cap(by_cls("body"), 12, "stat body")
+            elif k == "number":
+                cap(nums, 7, "number", "character")
+            elif k == "compare":
+                cols = unit("column")
+                cap(by_cls("h3"), 3, "column title"); cap(items, 10, "item")
+                for c in cols:
+                    n_items = [n for n in c.walk(_ignored) if n.tag == "li"]
+                    if len(n_items) > 4:
+                        fix(f"{at}: a column has {len(n_items)} items, limit 4")
+            elif k == "table":
+                rows = by_tag("tr")
+                body_rows = [r for r in rows if r.parent and r.parent.tag == "tbody"]
+                widest = max((len([c for c in r.kids if isinstance(c, Node)]) for r in rows), default=0)
+                if widest > 5:
+                    fix(f"{at}: {widest} columns, limit 5")
+                if len(body_rows) > 6:
+                    fix(f"{at}: {len(body_rows)} body rows, limit 6")
+                cap(by_tag("td"), 6, "cell"); cap(by_tag("th"), 3, "header")
+            elif k == "timeline":
+                unit("step"); cap(by_cls("caption"), 3, "step caption")
+                cap(by_cls("h3"), 3, "step title"); cap(by_cls("body"), 8, "step body")
+            elif k in ("callout", "callout-full"):
+                pins = by_cls("pin")
+                if len(pins) > (6 if k == "callout" else 5):
+                    fix(f"{at}: {len(pins)} pins, limit {6 if k == 'callout' else 5}")
+                if len(pins) != len(items):
+                    fix(f"{at}: {plural(len(pins), 'pin')} but {plural(len(items), 'note')} — they pair by order")
+                cap(items, 12 if k == "callout" else 10, "note")
+            elif k == "split":
+                body = by_cls("split__body")
+                total = sum(words(p) for b in body for p in b.walk(_ignored) if p.tag == "p")
+                if total > 60:
+                    fix(f"{at}: body is {total} words, limit 60")
+            elif k == "quote":
+                cap(by_tag("blockquote"), 30, "quotation"); cap(by_tag("figcaption"), 12, "attribution")
+            elif k == "image":
+                cap(by_cls("credit"), 12, "credit")
+            elif k == "gallery":
+                count([n for g in by_cls("gallery") for n in g.kids if isinstance(n, Node) and n.tag == "figure"], 2, 4, "image")
+            elif k == "code":
+                for pre in by_tag("pre"):
+                    lines = pre.text().strip("\n").split("\n")
+                    if len(lines) > 14:
+                        fix(f"{at}: {len(lines)} lines of code, limit 14")
+                    if max(map(len, lines), default=0) > 60:
+                        fix(f"{at}: a code line is {max(map(len, lines))} characters, limit 60")
 
         for n in inside:
             if "style" in n.attrs and "pin" not in n.cls:
-                fix(f"{at}: inline style on <{n.tag}> — only a callout .pin may carry one (SKILL.md §10)")
+                # a custom property is a value handed to a layout, not styling; a CSS property
+                # or a theme token set inline is the deck restyling itself
+                props = [d.split(":", 1)[0].strip() for d in n.attrs["style"].split(";") if d.strip()]
+                css_props = [p for p in props if not p.startswith("--")]
+                tokens = [p for p in props if p in THEME_TOKENS]
+                undeclared = [p for p in props if p.startswith("--") and p not in THEME_TOKENS and p not in allowed_props]
+                if css_props:
+                    fix(f"{at}: inline style ({css_props[0]}) on <{n.tag}> — only a callout .pin may carry one (SKILL.md §10)")
+                elif tokens:
+                    fix(f"{at}: the theme token {tokens[0]} set inline on <{n.tag}> — a deck never restyles the theme (SKILL.md §10)")
+                elif undeclared:
+                    check(f"{at}: {', '.join(undeclared)} set inline on <{n.tag}> — leave it if this install's layout reads it "
+                          f"(and name it under \"inline_properties\" in lint.json); remove it if you made it up")
             if {"meta", "eyebrow", "chip", "caption"} & set(n.cls) and SEPARATOR.search(n.text(_ignored).strip()):
                 fix(f'{at}: a typed separator in "{" ".join(n.text(_ignored).split())[:40]}" — '
                     f"use bare <span>s in .meta, or reword (SKILL.md §10)")
@@ -400,6 +475,14 @@ def lint(html: str, folder: Path) -> list[tuple[str, str]]:
         if kinds.count(k) > max(1, math.ceil(n / 10)):
             fix(f"{kinds.count(k)} {k} slides in {n} — at most one per 10 slides")
     return out
+
+
+def run_lint(html: str, src: Path) -> int:
+    """Lint and print; returns how many findings are 'fix'."""
+    if lint_config().get("enabled") is False:
+        print("lint: off for this install (lint.json)")
+        return 0
+    return report(lint(html, src.parent), src)
 
 
 def report(findings, src: Path) -> int:
@@ -619,6 +702,8 @@ def explode(src: Path, html: str, out: Path) -> None:
 
 if __name__ == "__main__":
     args = sys.argv[1:]
+    no_lint = "--no-lint" in args
+    args = [a for a in args if a != "--no-lint"]
     mode = args[0][2:] if args and args[0] in ("--explode", "--lint") else "build"
     if mode != "build":
         args = args[1:]
@@ -629,7 +714,10 @@ if __name__ == "__main__":
         sys.exit(f"not found: {src}")
     html = src.read_text(encoding="utf-8")
     if mode == "lint":
-        sys.exit(1 if report(lint(html, src.parent), src) else 0)
+        try:
+            sys.exit(1 if run_lint(html, src) else 0)
+        except ValueError as e:
+            sys.exit(f"error: {e}")
     if mode == "explode":
         explode(src, html, Path(args[1]) if len(args) > 1 else src.with_name("deck-work.html"))
     else:
@@ -638,6 +726,6 @@ if __name__ == "__main__":
             sys.exit("output would overwrite the input — pass a different out.html")
         build(src, out)
         try:                                   # advice only: a lint bug must never fail a build
-            report(lint(html, src.parent), src)
+            no_lint or run_lint(html, src)
         except Exception as e:
             print(f"lint: skipped ({type(e).__name__}: {e})")
