@@ -2174,7 +2174,7 @@
   const SHORTCUTS = [
     ["→ / space", "Next"], ["←", "Previous"], ["R / Home", "Restart from slide 1"], ["End", "Last slide"],
     ["O", "Overview"], ["E", "Edit mode"], ["S", "Presenter view"], ["T", "Cycle theme"],
-    ["P", "Export PDF"], ["D", "Download single file"], ["F", "Fullscreen"], ["?", "This sheet"], ["Esc", "Close / finish editing"],
+    ["P", "Export PDF"], ["C", "Copy slide as PNG"], ["D", "Download single file"], ["F", "Fullscreen"], ["?", "This sheet"], ["Esc", "Close / finish editing"],
     ["↑↓←→", "Overview: select slide"], ["Enter", "Overview: open selected slide"],
     ["1…9", "Overview: type a slide number"], [`${KEY.alt}arrows`, "Overview: reorder slide (edit mode)"],
     [`${KEY.cmd}Z`, "Undo"], [`${KEY.cmd}${KEY.shift}Z`, "Redo"], [`${KEY.cmd}D`, "Duplicate slide"], [KEY.del, "Delete selected sticker"],
@@ -2700,7 +2700,7 @@
     $("#pop-layer").innerHTML = `
       <div class="pop pop--menu" id="export-pop">
         <button class="menu-item" data-act="pdf"><svg class="icon"><use href="#i-pdf"/></svg>PDF<kbd>P</kbd></button>
-        <button class="menu-item" data-act="copy"><svg class="icon"><use href="#i-dup"/></svg>Copy slide as PNG</button>
+        <button class="menu-item" data-act="copy"><svg class="icon"><use href="#i-dup"/></svg>Copy slide as PNG<kbd>C</kbd></button>
         <button class="menu-item" data-act="png"><svg class="icon"><use href="#i-image"/></svg>Download slide as PNG</button>
       </div>`;
     positionPopover($("#export-pop"), anchor);
@@ -3191,6 +3191,7 @@
         case "e": e.preventDefault(); toggleEdit(); break;
         case "t": cycleTheme(); break;
         case "p": e.preventDefault(); exportPDF($("#btn-print")); break;
+        case "c": if (!meta && !e.altKey) copySlidePNG(); break;
         case "d": if (!meta) downloadStandalone(); break;
         case "s": openPresenter(); break;
         case "f": document.fullscreenElement ? document.exitFullscreen()

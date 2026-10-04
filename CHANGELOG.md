@@ -14,6 +14,12 @@ Tags on an entry: **runtime** (runtime.*), **docs** (the contract docs), **skele
 
 ## 2026-10-04
 
+### `C` copies the current slide as a PNG
+**runtime** — A single-key shortcut for the Copy slide as PNG item; listed in the Export menu and
+the `?` sheet. Ignored with Cmd/Ctrl/Alt held and while typing.
+
+**Forks:** `C` is now taken by the runtime. Rebind it if a brand extension uses it.
+
 ### Copy or download the current slide as a PNG; Export menu
 **runtime**
 - The toolbar's "Export PDF" button is now "Export" and opens a small menu: PDF (the `P` key still
