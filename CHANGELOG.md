@@ -26,6 +26,90 @@ badges and filters.
 
 **Forks:** nothing. A fork that keeps its own changelog in this format can adopt the same words.
 
+### Slide PNGs include icons and canvas content
+**runtime, fix**
+- The PNG is drawn from an isolated copy of the slide, so icons that point at a sprite elsewhere in
+  the page (`<use href="#i-…">`, list icons, separators, a brand's own sprite) came out blank. The
+  symbols a slide references now travel with it.
+- A `<canvas>` on the slide is exported with its current pixels instead of blank.
+
+**Forks:** nothing. Video and iframes on a slide still export empty.
+
+### Save falls back to a download where the save dialog is refused
+**runtime, docs, fix**
+- A standalone deck inside a cross-origin frame (an embedded preview) has a save dialog the browser
+  refuses to open. It now offers "Download copy" from the start there, and if the dialog is refused
+  anywhere else the click downloads the copy instead of failing with a toast.
+- The file is built before the chosen target is opened, so a deck that fails to serialise never
+  touches the file being replaced.
+- SKILL.md's hand-off example and the README no longer say a single-file deck saves over itself.
+  Autosave is unchanged: a deck saved into a folder autosaves, a single-file deck never does.
+
+**Forks:** check. If `SKILL.fork.md` copied the old hand-off line ("pick this file once and it saves over
+itself"), reword it: Save… is a one-shot save dialog.
+
+### Overflow guard no longer measures slides in motion
+**runtime, fix**
+- Since the switch to bounding rects, a slide measured while its content was still animating in
+  was read as overflowing: the `rise` offset, a `push` or `zoom` entrance, or an un-revealed step
+  resting 10px low. A bottom-anchored slide (the title) could not be shrunk out of it, so it was
+  flagged "Too much text" until the next visit. Late web fonts, an image load or a resize landing
+  inside the entrance triggered it; a `push` deck hit it on every arrival.
+- The guard now fits the arriving slide before its entrance starts, holds any measurement asked for
+  mid-transition until the slide has settled, and takes a child's own translation back out.
+- Every slide is re-fitted when a web font finishes loading at any point (not only the first
+  `fonts.ready`), after a theme switch, and just before printing. Nothing is re-fitted while print
+  styles are active, so the PDF carries exactly the fit the screen settled on.
+- Printed with speaker notes, the notes under a shrunk slide are no longer shrunk with it.
+
+**Forks:** check. Nothing to port. Drop any workaround that re-measured after a delay. A brand extension that
+changes slide layout on its own (injects content, swaps a stylesheet) should dispatch `resize` on
+`window` afterwards; that re-fits every slide.
+
+### Saving standalone decks
+**runtime, docs, feature, fix**
+- Standalone decks: Save… (Chrome/Edge) now opens the ordinary save dialog, suggests the deck's own name
+  and remembers the last folder; it writes once and keeps nothing, so nothing autosaves and the opened
+  file is only replaced if you pick it and confirm the OS's replace prompt. Other browsers download a
+  copy. Until saved, the button reads "Unsaved changes — Save…" in amber, the first edit shows a one-time
+  "Changes aren't saved yet" toast with a Save… action, and leaving edit mode repeats it. A download also
+  clears the unsaved state. The edit bar now has one save button; the duplicate Download copy there is gone
+  (the main bar's Download copy and `D` remain).
+- Fix (folder decks too): an edit made while an autosave was writing was marked saved; it now stays dirty
+  and saves again. A failed background folder write no longer triggers an unasked download. The fallback
+  download is named after the deck instead of `deck-edited.html`.
+
+**Forks:** check. Nothing required, unless you reworded the "Download copy" lines in `SKILL.fork.md`.
+
+### Sticker guides to other objects
+**runtime, feature**
+- Dragging a sticker now also snaps to the edges and centre of other stickers, and to the edges of the
+  slide's text blocks. These guides are blue; margin and centre guides are unchanged. Alt still drags freely.
+
+**Forks:** Nothing.
+
+### Blank split halves
+**runtime, docs, attribute, feature**
+- `data-clean` now also works on `slide--split`: it hides the image half (empty slot or picture; the
+  picture stays in the file) so stickers and text boxes can sit there. Options panel: "Blank canvas".
+
+**Forks:** Nothing.
+
+### Restart in presenter view
+**runtime, feature**
+- A Restart button (and Shift+R) returns the deck to slide 1 and zeroes the clock, asking first unless it
+  is already at the start. `R` still only resets the timer.
+
+**Forks:** check. `Shift+R` in presenter view is now taken.
+
+### Images no longer break in presenter view
+**runtime, fix**
+- Fix: images pasted into a slot or sticker, and SVGs the runtime de-grains at boot, showed as broken
+  icons in presenter view (their `blob:` URLs don't cross windows, and never on `file://`). The deck
+  copy sent to the presenter now carries the original path or a data: URI instead.
+
+**Forks:** Nothing.
+
 ### `C` copies the current slide as a PNG
 **runtime, feature** — A single-key shortcut for the Copy slide as PNG item; listed in the Export menu and
 the `?` sheet. Ignored with Cmd/Ctrl/Alt held and while typing.
