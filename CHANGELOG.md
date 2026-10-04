@@ -14,6 +14,14 @@ Tags on an entry: **runtime** (runtime.*), **docs** (the contract docs), **skele
 
 ## 2026-10-04
 
+### Images no longer break in presenter view
+**runtime**
+- Fix: images pasted into a slot or sticker, and SVGs the runtime de-grains at boot, showed as broken
+  icons in presenter view (their `blob:` URLs don't cross windows, and never on `file://`). The deck
+  copy sent to the presenter now carries the original path or a data: URI instead.
+
+**Forks:** Nothing.
+
 ### `C` copies the current slide as a PNG
 **runtime** — A single-key shortcut for the Copy slide as PNG item; listed in the Export menu and
 the `?` sheet. Ignored with Cmd/Ctrl/Alt held and while typing.

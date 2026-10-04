@@ -3093,8 +3093,23 @@
     renderPresenter();
   }
   // the deck's html for the presenter, minus the live window's transient state
-  function presenterHtml() {
+  // blob: URLs belong to the document that made them — a pasted or degrained
+  // image would be a broken icon in the presenter window (always on file://,
+  // where every page is its own origin). Swap them for something portable:
+  // the original asset path when it exists on disk, else a data: URI.
+  const portableSrc = new Map();   // blob url -> data url
+  async function presenterHtml() {
     const c = deck.cloneNode(true);
+    await Promise.all($$("img", c).map(async img => {
+      const src = img.getAttribute("src") || "";
+      if (!src.startsWith("blob:")) return;
+      const rel = img.dataset.src;
+      if (rel && !pending.has(rel)) { img.setAttribute("src", rel); return; }
+      try {
+        if (!portableSrc.has(src)) portableSrc.set(src, await toDataURL(await (await fetch(src)).blob()));
+        img.setAttribute("src", portableSrc.get(src));
+      } catch { /* revoked or unreadable: leave it, the presenter shows what it can */ }
+    }));
     $$(".is-entering, .is-leaving", c).forEach(s => s.classList.remove("is-entering", "is-leaving"));
     $$(".is-sel", c).forEach(n => n.classList.remove("is-sel"));
     $$("[contenteditable], [spellcheck]", c).forEach(n => { n.removeAttribute("contenteditable"); n.removeAttribute("spellcheck"); });
@@ -3105,7 +3120,7 @@
     mainChan.onmessage = e => {
       const d = e.data;
       if (d?.hello) return syncState();
-      if (d?.need === "deck") return mainChan.postMessage({ deckHtml: presenterHtml(), v: deckV() });
+      if (d?.need === "deck") { const v = deckV(); return presenterHtml().then(deckHtml => mainChan.postMessage({ deckHtml, v })); }
       if (d?.action === "next") advance();
       else if (d?.action === "prev") retreat();
       else if (d?.action === "home") show(0, true, "fwd");
