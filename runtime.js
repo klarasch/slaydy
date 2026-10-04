@@ -2683,6 +2683,16 @@
     clone.querySelectorAll('[data-animate="count"]').forEach((n, i) => {
       if (live[i]?._countRaf) n.textContent = countOriginal.get(live[i]) ?? n.textContent;
     });
+    // a cloned <canvas> is blank: freeze the live pixels into an <img> (a tainted canvas throws, so keep the clone)
+    const liveCanvas = slide.querySelectorAll("canvas");
+    clone.querySelectorAll("canvas").forEach((c, i) => {
+      try {
+        const im = document.createElement("img");
+        im.src = liveCanvas[i].toDataURL();
+        for (const n of ["class", "style", "width", "height"]) if (c.hasAttribute(n)) im.setAttribute(n, c.getAttribute(n));
+        c.replaceWith(im);
+      } catch {}
+    });
     await Promise.all([...clone.querySelectorAll("img")].map(async img => {
       const src = img.dataset.src || img.getAttribute("src");
       if (!src || src.startsWith("data:")) return;
@@ -2714,6 +2724,26 @@
     const style = document.createElementNS(XHTML, "style");
     // a still image: no entrance animation may be caught at its first frame
     style.textContent = css + "\n.x-html *, .x-html *::before, .x-html *::after { animation: none !important; transition: none !important; }";
+    // the exported SVG is its own document: <use href="#id"> targets (icon sprites) must travel with it
+    const SVGNS = "http://www.w3.org/2000/svg", XLINK = "http://www.w3.org/1999/xlink";
+    const sprite = document.createElementNS(SVGNS, "svg");
+    sprite.setAttribute("width", "0"); sprite.setAttribute("height", "0");
+    sprite.setAttribute("style", "position:absolute"); sprite.setAttribute("aria-hidden", "true");
+    const seen = new Set();
+    for (let scope = clone, more = true; more;) {
+      more = false;
+      for (const u of scope.querySelectorAll("use")) {
+        const ref = u.getAttribute("href") || u.getAttributeNS(XLINK, "href") || u.getAttribute("xlink:href") || "";
+        const id = ref.startsWith("#") ? decodeURIComponent(ref.slice(1)) : "";
+        if (!id || seen.has(id)) continue;
+        seen.add(id);
+        const src = document.getElementById(id);
+        if (!src || slide.contains(src)) continue;
+        sprite.append(src.cloneNode(true)); more = true;
+      }
+      scope = sprite;   // later rounds only need to scan what was just added
+    }
+    if (sprite.firstChild) bodyEl.append(sprite);
     root.append(style, bodyEl);
     const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
     svg.setAttribute("width", W); svg.setAttribute("height", H); svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
