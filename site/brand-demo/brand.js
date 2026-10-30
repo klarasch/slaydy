@@ -18,5 +18,13 @@ options.declare({ name: "data-tone", on: ".panel", group: "Slide", label: "Panel
   hint: "Claim slides: a quiet panel or an accent one." });
 
 // brand art in the split image slot, instead of the "+ image" placeholder
+// Picking one swaps out whatever image is in the slot (⌘Z brings it back);
+// uploading an image afterwards replaces the art.
 options.declare({ name: "data-art", on: ".split__media", group: "Slide", label: "Picture", values: ["mesh", "topo", "none"],
-  hint: "Brand art in the empty image slot. Uploading an image replaces it." });
+  hint: "Brand art for the image slot. Picking one replaces the current image; uploading an image replaces the art.",
+  onchange: slide => {
+    const slot = slide.querySelector(".split__media");
+    if (!slot?.hasAttribute("data-art")) return;
+    slot.querySelector("img")?.remove();
+    slot.dataset.empty = "";
+  } });

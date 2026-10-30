@@ -319,11 +319,19 @@ overview and print switch off `transition` only: if yours uses `animation`, swit
 **Brand art in an image slot.** An empty slot (`.media[data-empty]`) draws its "+ image"
 placeholder in CSS, so a brand can swap that for its own art with an option on the slot. No
 picker, no library: the author chooses from the Options panel, and uploading a real image
-still replaces it, because the slot stops being empty:
+still replaces it, because the slot stops being empty. Without the `onchange` below, art
+only shows in a slot with no image yet:
 
 ```js
 slaydy.options.declare({ name: "data-art", on: ".split__media", group: "Slide", label: "Picture",
-  values: ["render", "photo", "none"], hint: "Brand art in the empty image slot." });
+  values: ["render", "photo", "none"], hint: "Brand art for the image slot.",
+  // picking art swaps out an image already in the slot; the panel snapshots first, so ⌘Z restores it
+  onchange: slide => {
+    const slot = slide.querySelector(".split__media");
+    if (!slot?.hasAttribute("data-art")) return;
+    slot.querySelector("img")?.remove();
+    slot.dataset.empty = "";
+  } });
 ```
 ```css
 .split__media[data-empty][data-art]::after { content: none; }   /* any choice, "none" included, drops the prompt */
