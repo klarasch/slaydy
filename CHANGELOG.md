@@ -19,6 +19,19 @@ the named thing has something to do or to delete), **port** (every fork has to a
 
 ## 2026-10-30
 
+### View-only copy
+**runtime, docs, feature**
+- Export → **View-only copy** downloads the deck as one `.html` named `<deck> (view only).html`,
+  without speaker notes, change requests, the `slaydy-brief` tag or HTML comments. It opens
+  with no edit mode or Download copy; the toolbar says "View only". Links, transitions,
+  presenter view, PDF and PNG export still work. It isn't a save: the unsaved dot stays.
+- Cropped images still carry the whole original, and anyone can edit an HTML file by hand.
+  PDF stays the format for sending outside the company (some mail filters block `.html`).
+- `slaydy:serialize` carries `view` so a brand can strip its own private bits too.
+
+**Forks:** check. A brand layer that keeps private content in the deck (its own notes,
+internal tags) should drop it from `root` when `view` is true.
+
 ### Brand layouts in the picker, brand transitions, options on elements, two chrome tokens
 **runtime, docs, feature, fix**
 - `slaydy.layouts.add({ key, label, html, wireframe? })` puts a brand's layout in the Add-slide

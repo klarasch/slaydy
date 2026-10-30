@@ -660,6 +660,7 @@
   }
 
   function toggleEdit(force) {
+    if (viewOnly && (force ?? !editing)) return;
     editing = force ?? !editing;
     document.body.classList.toggle("is-editing", editing);
     if (overviewOpen) buildOverview();   // thumbnails' drag wiring and hint depend on editing
@@ -1517,7 +1518,10 @@
   }
   const validateOptions = () => OPTIONS.forEach(validateOption);
 
-  async function serialize({ inline, drop }) {
+  // a copy opened from Export → View-only copy: no edit mode, and it stays that way
+  const viewOnly = document.documentElement.hasAttribute("data-view-only");
+
+  async function serialize({ inline, drop, view }) {
     const root = document.documentElement.cloneNode(true);
     // a subset export: the clone's slides line up with `slides` by index
     if (drop) root.querySelectorAll(".deck .slide").forEach((s, i) => { if (drop(i)) s.remove(); });
@@ -1532,8 +1536,18 @@
     // bundle into a single-file export. waitUntil() defers the save for async
     // work (fetching assets to inline).
     const jobs = [];
-    emit("serialize", { root, inline: !!inline, waitUntil: p => jobs.push(p) });
+    emit("serialize", { root, inline: !!inline, view: !!view, waitUntil: p => jobs.push(p) });
     await Promise.all(jobs);
+    // view-only: what a reader shouldn't get — speaker notes, change requests,
+    // the brief Claude reads, and HTML comments — and the flag that keeps it locked
+    if (view) {
+      root.querySelectorAll(".deck .notes, meta[name='slaydy-brief']").forEach(n => n.remove());
+      root.querySelectorAll("[data-note]").forEach(n => n.removeAttribute("data-note"));
+      const tw = document.createTreeWalker(root, NodeFilter.SHOW_COMMENT), comments = [];
+      while (tw.nextNode()) comments.push(tw.currentNode);
+      comments.forEach(c => c.remove());
+      root.setAttribute("data-view-only", "");
+    }
     root.querySelectorAll("[data-runtime],[data-gen]").forEach(n => n.remove());
     root.querySelectorAll(".slide").forEach(s => {
       s.classList.remove("is-active", "is-entering", "is-leaving");
@@ -1590,13 +1604,15 @@
     ((document.title || "").replace(/[\\/:*?"<>|]/g, "").trim() || "deck") + suffix + ".html";
 
   // explicit single-file export: one .html that opens anywhere, no siblings
-  async function downloadStandalone({ drop, suffix = "", done } = {}) {
+  async function downloadStandalone({ drop, suffix = "", done, view } = {}) {
+    view = view || viewOnly;                          // a copy of a view-only copy stays view-only
     try {
-      const blob = new Blob([await serialize({ inline: true, drop })], { type: "text/html" });
+      const blob = new Blob([await serialize({ inline: true, drop, view })], { type: "text/html" });
       const a = document.createElement("a");
       a.href = URL.createObjectURL(blob);
-      a.download = deckFileName(suffix);
+      a.download = deckFileName(suffix + (view ? " (view only)" : ""));
       a.click();
+      if (view) return toast(done || "View-only copy downloaded.");   // notes aren't in it: not a save
       if (!drop) { dirty = false; updateSaveUI(); }   // the changes are now in a file
       if (done) return toast(done);
       const pendingCount = $$("[data-note]").length;
@@ -2332,10 +2348,10 @@
       <span class="tb-sep"></span>
       ${showTheme ? btn({ id: "btn-theme", icon: "theme", label: "Theme", key: "T", tip: "Switch light/dark theme" }) : ""}
       ${btn({ id: "btn-presenter", icon: "present", label: "Presenter", key: "S", tip: "Open presenter view with speaker notes" })}
-      ${btn({ id: "btn-print", icon: "pdf", label: "Export", key: "P", tip: "Export — PDF, or this slide as a PNG" })}
-      ${btn({ id: "btn-single", icon: "download", label: "Download copy", key: "D", tip: SAVE_TIP })}
+      ${btn({ id: "btn-print", icon: "pdf", label: "Export", key: "P", tip: viewOnly ? "Export — PDF, or this slide as a PNG" : "Export — PDF, PNG, or a view-only copy" })}
+      ${viewOnly ? "" : btn({ id: "btn-single", icon: "download", label: "Download copy", key: "D", tip: SAVE_TIP })}
       <span class="tb-sep"></span>
-      ${btn({ id: "btn-edit", icon: "edit", label: "Edit", key: "E", tip: "Switch to edit mode" })}
+      ${viewOnly ? `<span class="tb-tag">View only</span>` : btn({ id: "btn-edit", icon: "edit", label: "Edit", key: "E", tip: "Switch to edit mode" })}
       ${btn({ id: "btn-help", icon: "help", cls: "icon-only", key: "?", tip: "Keyboard shortcuts" })}
     ` : `
       ${restart}
@@ -2367,7 +2383,7 @@
       $("#btn-theme")?.addEventListener("click", cycleTheme);
       $("#btn-presenter").onclick = openPresenter;
       $("#btn-print").onclick = e => exportMenu(e.currentTarget);
-      $("#btn-edit").onclick = () => toggleEdit();
+      if ($("#btn-edit")) $("#btn-edit").onclick = () => toggleEdit();
       $("#btn-help").onclick = () => toggleShortcuts();
     } else {
       $("#btn-add").onclick = e => openPicker(e.currentTarget);
@@ -2780,6 +2796,7 @@
         <button class="menu-item" data-act="pdf"><svg class="icon"><use href="#i-pdf"/></svg>PDF<kbd>P</kbd></button>
         <button class="menu-item" data-act="copy"><svg class="icon"><use href="#i-dup"/></svg>Copy slide as PNG<kbd>C</kbd></button>
         <button class="menu-item" data-act="png"><svg class="icon"><use href="#i-image"/></svg>Download slide as PNG</button>
+        ${viewOnly ? "" : `<button class="menu-item" data-act="view"><svg class="icon"><use href="#i-download"/></svg>View-only copy</button>`}
       </div>`;
     positionPopover($("#export-pop"), anchor);
     $("#export-pop").onclick = e => {
@@ -2788,6 +2805,7 @@
       closePopover();
       if (act === "pdf") exportPDF(anchor);
       else if (act === "copy") copySlidePNG();
+      else if (act === "view") downloadStandalone({ view: true });
       else downloadSlidePNG();
     };
   }

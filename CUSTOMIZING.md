@@ -235,11 +235,13 @@ is still exported; `transient.add("data-x")` equals declaring `{ derived: true }
 
 Two more hooks round out the contract:
 
-- **`slaydy:serialize`** fires on `.deck` with `{ root, inline, waitUntil }` before the
+- **`slaydy:serialize`** fires on `.deck` with `{ root, inline, view, waitUntil }` before the
   save's strip pass. `root` is the cloned document — mutate it, not the live DOM. `inline` is
   true for the single-file export, which is your cue to bake in anything your code normally
   fetches from the folder (an icon bundle, say); `waitUntil(promise)` holds the save open for
-  that async work. Note the export also inlines relative `url()` refs inside every linked
+  that async work. `view` is true for Export → View-only copy: strip anything of yours a
+  reader shouldn't get (the runtime already drops speaker notes, change requests, the brief and
+  HTML comments). Note the export also inlines relative `url()` refs inside every linked
   stylesheet, so CSS-referenced assets need no handling at all.
 - **`data-runtime="print"`** — chrome you mount with `data-runtime` is stripped from saves
   *and* hidden in print. The `"print"` value keeps it visible in the PDF while still keeping

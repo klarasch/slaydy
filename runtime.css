@@ -1186,6 +1186,7 @@ html:fullscreen body.is-idle { cursor: none; }
   min-width: 66px; text-align: center; color: rgba(246, 245, 243, .7);
 }
 .tb-sep { width: 1px; height: 20px; background: rgba(255, 255, 255, .12); margin: 0 5px; }
+.tb-tag { font: 500 12px/1 var(--font-body, system-ui); color: rgba(255, 255, 255, .55); padding: 0 10px; white-space: nowrap; }
 
 /* --- narrow viewports: the edit-mode bar is the widest (restart, prev,
    counter, next, sep, add slide, dup, del, sep, options, request change,
