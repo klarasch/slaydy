@@ -1,0 +1,22 @@
+/* A pretend brand for trying the extension points. Not shipped with the skill. */
+
+/* the claim layout */
+.slide--claim { display: grid; align-content: center; }
+.slide--claim .panel { border-left: 6px solid var(--accent); padding: 8px 0 8px 48px; max-width: 900px; }
+.slide--claim .panel[data-tone="loud"] { background: var(--accent); color: var(--accent-fg); border-color: transparent; padding: 48px; border-radius: 20px; }
+.slide--claim .panel[data-tone="loud"] .lead, .slide--claim .panel[data-tone="loud"] .eyebrow { color: inherit; }
+
+/* the swoosh transition: content slides in from the right, old slide fades over it */
+.slide[data-tx="swoosh"].is-leaving { transition: opacity var(--tx-dur) var(--ease); opacity: 0; }
+.slide[data-tx="swoosh"].is-entering > *:not(.slide__chrome):not(.slide__wash):not([data-step]) { transform: translateX(120px); opacity: 0; }
+.slide[data-tx="swoosh"].is-entering.is-active > *:not(.slide__chrome):not(.slide__wash):not([data-step]) {
+  transition: transform var(--tx-dur) var(--ease), opacity var(--tx-dur) var(--ease); transform: none; opacity: 1;
+}
+
+/* brand art in the empty split slot */
+.split__media[data-empty][data-art]::after { content: none; }
+.split__media[data-empty][data-art="mesh"] { background: url("../../images/mesh-warm.svg") center / cover; }
+.split__media[data-empty][data-art="topo"] { background: url("../../images/topo.svg") center / cover; }
+
+/* the two chrome tokens */
+:root { --edit-ring: #3ec7a0; --deck-shadow: 0 30px 90px -30px rgba(62, 199, 160, .45); }
