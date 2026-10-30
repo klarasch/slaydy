@@ -1986,7 +1986,7 @@
     a.setAttribute("rel", "noopener");
     el.normalize();
     const r = document.createRange();
-    if (range.collapsed) { r.setStartAfter(a); r.collapse(true); } else r.selectNodeContents(a);
+    r.setStartAfter(a); r.collapse(true);              // caret after the link, as in a doc editor
     sel.removeAllRanges();
     sel.addRange(r);
     commitTextEdit();
