@@ -32,6 +32,7 @@ write two sentences, use a `<b>` tag for a division, or let the whitespace do th
 | `.serif` | switch to the display serif (quotes) | — |
 | `.accent` / `.dim` | colour a `<span>` | — |
 | `<strong>` | emphasis — accent-coloured in titles (`.display`/`.h1`/`.h2`/`.h3`, already 600 so weight would do nothing), semibold (600) in body text. Context decides rendering, one tag. In edit mode, ⌘B toggles it on the selection. `.accent` still applies explicit color regardless of context — reach for `<strong>` for "this word matters," `.accent` for "this word is this color" | — |
+| `<a href>` | link — keeps the text colour, underlined in the accent; a click opens it instead of advancing. In edit mode, pasting a URL makes one: over selected words they become the link, at a caret the URL goes in without `https://`, over a link it re-points it. Give it `target="_blank" rel="noopener"` | — |
 | `.chip` | pill-shaped tag | 13px |
 | `.stack .stack--sm/md/lg` | vertical flow with gap | — |
 | `<code>` | inline mono | — |

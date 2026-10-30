@@ -17,6 +17,21 @@ the named thing has something to do or to delete), **port** (every fork has to a
 
 ---
 
+## 2026-10-30
+
+### Paste a URL to make a link
+**runtime, docs, feature**
+- In edit mode, pasting a URL (`https://`, `mailto:`, or a bare `www.`) into text makes an
+  `<a href>`: selected words become the link text, at a caret the URL goes in without its
+  `https://`, and pasting over part of an existing link re-points it. One undo step. Anything
+  that isn't a single URL still pastes as plain text.
+- Clicking a link in view mode opens it instead of advancing the slide.
+- Links keep the text's colour and underline in `--accent`, at zero specificity
+  (`:where(.slide) a[href]`), so a theme's own `a` rule wins. Hand-written links that used to
+  show browser blue now follow the text colour. `LAYOUTS.md` lists `<a href>`.
+
+**Forks:** nothing. A theme that wants a different link look styles `a` as usual.
+
 ## 2026-10-05
 
 ### The lint can be told what a brand's own markup is

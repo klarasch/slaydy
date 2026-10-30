@@ -414,6 +414,16 @@ code {
   background: color-mix(in oklab, var(--fg) 9%, transparent);
   color: var(--fg);
 }
+/* a link (paste a URL in edit mode) keeps the text's colour and underlines
+   in the accent. :where() keeps it at zero specificity, so a theme's own
+   `a` rule wins without a fight. */
+:where(.slide) a[href] {
+  color: inherit;
+  text-decoration: underline;
+  text-decoration-color: var(--accent);
+  text-decoration-thickness: .07em;
+  text-underline-offset: .18em;
+}
 .accent { color: var(--accent); }
 .dim { color: var(--muted); }
 

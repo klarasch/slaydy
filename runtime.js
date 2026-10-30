@@ -1903,6 +1903,58 @@
     measureOverflow(slides[index]);
   }
 
+  /* Pasting a URL into text makes a link. With words selected they become
+     the link text; at a bare caret the URL is inserted, shown without its
+     https:// so it reads like a slide, not a browser bar. Pasting over part of
+     an existing link re-points it. Anything else pastes as plain text. */
+  function pastedUrl(cb) {
+    const t = (cb?.getData("text/plain") || "").trim();
+    if (/^www\.[^\s<>"]+\.[^\s<>"]+$/i.test(t)) return "https://" + t;
+    return /^(https?:\/\/|mailto:)[^\s<>"]+$/i.test(t) ? t : "";
+  }
+  const linkLabel = url => url.replace(/^mailto:/i, "").replace(/^https?:\/\//i, "").replace(/\/$/, "");
+  function closestLinkWithin(node, leaf) {
+    let n = node.nodeType === 1 ? node : node.parentElement;
+    while (n && n !== leaf) { if (n.tagName === "A") return n; n = n.parentElement; }
+    return null;
+  }
+  function pasteLink(el, url) {
+    const sel = getSelection();
+    if (!sel.rangeCount) return false;
+    const range = sel.getRangeAt(0);
+    if (!el.contains(range.startContainer) || !el.contains(range.endContainer)) return false;
+    const start = closestLinkWithin(range.startContainer, el);
+    if (range.collapsed && start) return false;          // caret inside a link: plain paste
+    // flush typing so far as its own undo step, then commit the paste as another
+    preEditHTML ??= deck.innerHTML;
+    commitTextEdit();
+    let a;
+    if (!range.collapsed && start && start === closestLinkWithin(range.endContainer, el)) {
+      a = start;
+    } else {
+      a = document.createElement("a");
+      if (range.collapsed) a.textContent = linkLabel(url);
+      else {
+        const frag = range.extractContents();
+        frag.querySelectorAll("a").forEach(x => x.replaceWith(...x.childNodes));   // links never nest
+        a.appendChild(frag);
+      }
+      range.insertNode(a);
+      $$("a", el).forEach(x => { if (!x.textContent) x.remove(); });
+    }
+    a.setAttribute("href", url);
+    a.setAttribute("target", "_blank");
+    a.setAttribute("rel", "noopener");
+    el.normalize();
+    const r = document.createRange();
+    if (range.collapsed) { r.setStartAfter(a); r.collapse(true); } else r.selectNodeContents(a);
+    sel.removeAllRanges();
+    sel.addRange(r);
+    commitTextEdit();
+    measureOverflow(slides[index]);
+    return true;
+  }
+
   function initBulletEditing() {
     deck.addEventListener("keydown", e => {
       if (!editing) return;
@@ -3277,6 +3329,7 @@
       // out from under someone using an interactive slide is never right.
       // The rest of the slide still advances, as do the arrow keys.
       if (inCustom(e.target)) return;
+      if (e.target.closest("a[href]")) return;          // a link opens; it doesn't advance
       const r = deck.getBoundingClientRect();
       (e.clientX - r.left) / r.width > 0.35 ? next() : prev();
     });
@@ -3308,6 +3361,11 @@
     // paste an image anywhere in edit mode
     addEventListener("paste", e => {
       if (!editing) return;
+      const field = document.activeElement;
+      if (field?.isContentEditable && deck.contains(field)) {
+        const url = pastedUrl(e.clipboardData);
+        if (url && pasteLink(field, url)) { e.preventDefault(); return; }
+      }
       const svg = clipboardSvg(e.clipboardData);
       if (svg) {
         e.preventDefault();
