@@ -213,6 +213,14 @@ options.declare({ name: "data-veil", label: "Veil", values: ["soft", "dense"],
                   when: ".slide--section",
                   hint: "Scrim strength over the brand gradient." });
 
+// An option that lives on an element inside the slide: `on` is a selector,
+// and the panel sets it on the first match. The row only shows on slides
+// that have one.
+options.declare({ name: "data-tone", on: ".panel", label: "Tone", values: ["calm", "loud"] });
+
+// Validation runs once, after every script on the page has loaded, so a
+// brand value is never reported as a typo just because brand.js came second.
+
 // Undoable edits: push the current deck state BEFORE mutating, and your
 // change lands on the same ⌘Z stack as the runtime's own edits.
 snapshot();
@@ -254,7 +262,10 @@ came to implement an asset-baking hook locally after upstream had already shippe
 | `--sep`, `--marker-*`, `--code-*`, `--font-*` | meta divider glyph, list markers, code colours, typefaces | CSS tokens, `BRANDING.md` |
 | `slaydy:slidechange` `slaydy:step` | react to navigation and progressive reveal | events on `.deck` |
 | `slaydy:serialize` | rewrite the save/export clone; `inline` says which; `waitUntil` holds it open | event on `.deck` |
-| `slaydy.options.declare()` | per-slide `data-*` options: derived ones stripped on save, valued ones get a UI | JS |
+| `slaydy.options.declare()` | per-slide `data-*` options: derived ones stripped on save, valued ones get a UI; `on: "<selector>"` puts one on an element inside the slide | JS |
+| `slaydy.layouts.add()` `.remove()` | offer your own layouts in the Add-slide picker, retire stock ones | JS, Layer 4 |
+| `slaydy.transitions.add()` | a transition of your own, listed in the Transition control | JS + CSS, Layer 4 |
+| `--deck-shadow` `--edit-ring` | the deck's drop shadow in a window; the colour of edit-mode rings | CSS tokens |
 | `slaydy.snapshot()` `slaydy.toast()` | undoable extension edits; the runtime's message UI | JS |
 | `slaydy.serialize({ inline })` | the deck as a string, folder-relative or single-file | JS |
 | `data-gen` `data-runtime` `data-runtime="print"` | mark injected DOM so saves strip it; keep print-only chrome | attributes |
@@ -272,8 +283,38 @@ Add layouts without touching the runtime:
 2. Document it in `themes/<yours>.md` — that file overrides Claude's defaults, so a line like
    "prefer `slide--acme-demo` (markup: …) for product screenshots" makes generation use it.
 
-The add-slide picker in the browser won't show custom layouts (it's runtime UI), but Claude
-will generate and revise them, and users can duplicate one to make more.
+3. Offer it in the browser's Add-slide picker from `custom.js`. `html` is the slide's markup
+   with placeholder text (a string, or a function returning one); `wireframe` is optional tile
+   art, `<i>` blocks positioned in percent like the stock tiles (`class="a"` for accent,
+   `class="img"` for an image). Adding a stock key replaces it; `remove()` hides one:
+
+   ```js
+   slaydy.layouts.add({ key: "acme-demo", label: "Demo",
+     html: `<section class="slide slide--acme-demo" data-title="Demo">…</section>`,
+     wireframe: `<i class="img" style="left:0;top:0;width:60%;height:100%"></i>` });
+   slaydy.layouts.remove("gallery");
+   ```
+
+**Your own transitions.** Register the name, then write the motion in CSS. The runtime puts
+`data-tx="<name>"` on both slides in a move: the arriving one gets `.is-entering`, then
+`.is-active` a frame later; the departing one gets `.is-leaving`. Both classes stay on for
+`--tx-dur` (450ms). Animate the slide's children, not the slide box (a moving box drags its
+background across the frame), and keep the departing slide on top, as the stock ones do:
+
+```js
+slaydy.transitions.add("acme-swoosh");
+```
+```css
+.slide[data-tx="acme-swoosh"].is-leaving { transition: opacity var(--tx-dur) var(--ease); opacity: 0; }
+.slide[data-tx="acme-swoosh"].is-entering > *:not(.slide__chrome):not(.slide__wash):not([data-step]) { transform: translateX(40px); }
+.slide[data-tx="acme-swoosh"].is-entering.is-active > *:not(.slide__chrome):not(.slide__wash):not([data-step]) {
+  transition: transform var(--tx-dur) var(--ease); transform: none;
+}
+```
+
+Reduced motion turns every transition, yours included, into `fade`. Thumbnails, the
+overview and print switch off `transition` only: if yours uses `animation`, switch it off in
+`.thumb__scaler` and `@media print` too.
 
 **Tell the lint about them.** `standalone.py` lints every deck it builds, and Claude clears its
 `fix` lines before handing a deck over, so a line that is wrong for your markup is an

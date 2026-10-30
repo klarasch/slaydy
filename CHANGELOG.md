@@ -19,6 +19,23 @@ the named thing has something to do or to delete), **port** (every fork has to a
 
 ## 2026-10-30
 
+### Brand layouts in the picker, brand transitions, options on elements, two chrome tokens
+**runtime, docs, feature, fix**
+- `slaydy.layouts.add({ key, label, html, wireframe? })` puts a brand's layout in the Add-slide
+  picker; `slaydy.layouts.remove(key)` hides a stock one. `CUSTOMIZING.md`, Layer 4.
+- `slaydy.transitions.add(name)` adds a transition name: the Transition control lists it and
+  validation accepts it. The motion is the brand's CSS on `.slide[data-tx="<name>"]`.
+- Option validation now runs once, after every script on the page has loaded. Before, it ran
+  before brand scripts, so a brand's own value (a transition name, say) warned on every load.
+- `options.declare({ on: "<selector>" })`: an option that lives on an element inside the slide.
+  The Options panel sets it on the first match and only shows it where there is one.
+- `--deck-shadow` (the deck's drop shadow in a window) and `--edit-ring` (the colour of every
+  edit-mode ring) are tokens. Both default to what they were.
+
+**Forks:** check. A fork that re-declared `data-transition` or added its own attribute to dodge
+the load-time warning can switch to `transitions.add()`. A fork that overrides the deck
+shadow or edit rings in CSS can set the two tokens instead.
+
 ### Paste a URL to make a link
 **runtime, docs, feature**
 - In edit mode, pasting a URL (`https://`, `mailto:`, or a bare `www.`) into text makes an

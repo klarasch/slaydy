@@ -87,7 +87,10 @@ body {
   transform: translate(var(--deck-x, 0px), var(--deck-y, 0px)) scale(var(--scale, 1));
   transform-origin: 0 0;
   border-radius: var(--slide-radius);
-  box-shadow: 0 40px 120px -30px rgba(0, 0, 0, 0.7);
+  /* --deck-shadow: the drop shadow under the deck in a window. --edit-ring: the colour
+     of every edit-mode ring (deck, focused text, image slot, selected sticker). A theme
+     sets either on :root; both default to what they always were. */
+  box-shadow: var(--deck-shadow, 0 40px 120px -30px rgba(0, 0, 0, 0.7));
 }
 
 /* presenting: edge-to-edge, no card, black surround regardless of theme */
@@ -533,7 +536,7 @@ h1 strong, h2 strong, h3 strong,
 }
 
 body.is-editing .media { cursor: pointer; outline-offset: 3px; }
-body.is-editing .media:hover { outline: 2px solid var(--accent); }
+body.is-editing .media:hover { outline: 2px solid var(--edit-ring, var(--accent)); }
 
 .media-hover {
   position: absolute; inset: 0; z-index: 3;
@@ -1547,7 +1550,7 @@ body.is-picking .thumb.is-picked .thumb__check {
 .thumb__label b { color: rgba(255, 255, 255, .85); font-weight: 500; }
 
 /* --- edit mode: editable affordances --- */
-body.is-editing .deck { box-shadow: 0 0 0 2px var(--accent), 0 40px 120px -30px rgba(0,0,0,.7); }
+body.is-editing .deck { box-shadow: 0 0 0 2px var(--edit-ring, var(--accent)), var(--deck-shadow, 0 40px 120px -30px rgba(0,0,0,.7)); }
 [contenteditable="true"], [contenteditable="plaintext-only"] {
   outline: 1px dashed transparent;
   outline-offset: 6px;
@@ -1557,8 +1560,8 @@ body.is-editing .deck { box-shadow: 0 0 0 2px var(--accent), 0 40px 120px -30px 
 body.is-editing [contenteditable]:hover { outline-color: var(--faint); cursor: text; }
 body.is-editing [contenteditable]:focus {
   position: relative; z-index: 3;
-  outline: 2px solid var(--accent); outline-offset: 6px;
-  background: color-mix(in oklab, var(--accent) 8%, transparent);
+  outline: 2px solid var(--edit-ring, var(--accent)); outline-offset: 6px;
+  background: color-mix(in oklab, var(--edit-ring, var(--accent)) 8%, transparent);
 }
 
 /* pasted / dropped images, freely positioned, with corner resize handles */
@@ -1572,7 +1575,7 @@ body.is-editing [contenteditable]:focus {
 .sticker img { display: block; width: 100%; height: auto; border-radius: inherit; -webkit-user-drag: none; pointer-events: none; }
 body.is-editing .sticker { cursor: grab; }
 body.is-editing .sticker:active { cursor: grabbing; }
-body.is-editing .sticker.is-sel { outline: 2px solid var(--accent); outline-offset: 3px; }
+body.is-editing .sticker.is-sel { outline: 2px solid var(--edit-ring, var(--accent)); outline-offset: 3px; }
 /* behind text: below the slide's in-flow content, above its wash (which is
    first in the DOM at the same z-index). Selected or not, it stays behind —
    what the editor shows is what the slide is. */

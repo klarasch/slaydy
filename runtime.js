@@ -1450,12 +1450,12 @@
     const d = { on: "slide", type: def.values ? "enum" : (def.type || "text"), ...def };
     OPTIONS.set(d.name, d);
     if (d.derived) TRANSIENT.add(d.name);
-    // extensions declare after boot (custom.js loads after runtime.js), so the
-    // boot-time validateOptions() pass has already run — validate late arrivals
-    // here or the documented typo warning never fires for exactly them
-    if (booted) validateOption(d);
+    // the one validation pass waits for window load, so every extension has
+    // declared by then; a declaration after that is validated on arrival
+    if (optionsValidated) validateOption(d);
     return d;
   }
+  let optionsValidated = false;
   [
     { name: "data-fit", derived: true },
     { name: "data-overflow", derived: true },
@@ -1490,13 +1490,30 @@
       hint: "Hide the placeholder prompt and dashed frame, or on a split slide the image half — an empty surface for pasted images and text boxes. The image itself is kept." },
   ].forEach(declareOption);
 
+  // where an option lives on a slide: the slide itself (on: "slide"), or the
+  // first element the runtime drives that matches its `on` selector. "media"
+  // is the runtime's own (the crop chip owns it) and never reaches the panel.
+  const optTarget = (o, s) => o.on === "slide" ? s : outside($$(o.on, s))[0] || null;
+  const inPanel = o => o.on !== "media" && !o.derived && (o.values || o.type === "flag");
   function validateOption(o) {
-    if (o.on !== "slide" || !o.values) return;
+    if (o.on === "media" || !o.values) return;
     slides.forEach((s, i) => {
-      const v = s.getAttribute(o.name);
-      if (v !== null && v !== "" && !o.values.includes(v))
-        console.warn(`slaydy: slide ${i + 1} has ${o.name}="${v}" — expected one of: ${o.values.join(", ")}`);
+      const els = o.on === "slide" ? [s] : outside($$(o.on, s));
+      els.forEach(el => {
+        const v = el.getAttribute(o.name);
+        if (v !== null && v !== "" && !o.values.includes(v))
+          console.warn(`slaydy: slide ${i + 1} has ${o.name}="${v}"${el === s ? "" : ` on ${o.on}`} — expected one of: ${o.values.join(", ")}`);
+      });
     });
+  }
+  // a brand's own transition: its name joins data-transition's values (so the
+  // Transition control lists it and validation accepts it); the motion is the
+  // brand's CSS on .slide[data-tx="<name>"].is-entering / .is-active / .is-leaving
+  function addTransition(name) {
+    if (!/^[a-z][a-z0-9-]*$/.test(name || "")) throw new Error(`slaydy.transitions.add: "${name}" — lowercase letters, digits and - only`);
+    const o = OPTIONS.get("data-transition");
+    if (!o.values.includes(name)) o.values = [...o.values.filter(v => v !== "none"), name, "none"];
+    return name;
   }
   const validateOptions = () => OPTIONS.forEach(validateOption);
 
@@ -1702,6 +1719,28 @@
     { key: "code", label: "Code", html: () => `<section class="slide slide--code" data-title="Code"><div class="stack stack--sm"><p class="eyebrow">Kicker</p><h2 class="h1">Headline goes here</h2></div><pre>code goes here</pre></section>` },
     { key: "end", label: "End", html: () => `<section class="slide slide--end" data-bare data-title="End"><p class="eyebrow">Fin</p><h2 class="display">Headline goes here</h2></section>` },
   ];
+
+  // brands add (or retire) picker layouts: slaydy.layouts.add({ key, label, html, wireframe? })
+  // html is a string or a function returning one; wireframe is the tile's inner
+  // markup (<i> blocks positioned in %, as in tileWireframe). Adding an existing
+  // key replaces that entry in place.
+  const layoutWF = new Map();
+  function addLayout(def) {
+    const { key, label, html, wireframe } = def || {};
+    if (!key || typeof key !== "string") throw new Error("slaydy.layouts.add: needs a key");
+    if (typeof html !== "string" && typeof html !== "function") throw new Error(`slaydy.layouts.add("${key}"): html must be a string or a function`);
+    const l = { key, label: label || key, html: typeof html === "function" ? html : () => html };
+    const at = LAYOUTS.findIndex(x => x.key === key);
+    at < 0 ? LAYOUTS.push(l) : (LAYOUTS[at] = l);
+    if (wireframe != null) layoutWF.set(key, String(wireframe)); else layoutWF.delete(key);
+    return key;
+  }
+  function removeLayout(key) {
+    const at = LAYOUTS.findIndex(x => x.key === key);
+    if (at >= 0) LAYOUTS.splice(at, 1);
+    layoutWF.delete(key);
+    return at >= 0;
+  }
 
   function insertSlideHTML(html) {
     snapshot();
@@ -2474,10 +2513,10 @@
       // an option's `when` (selector string or predicate) gates it to slides
       // where it actually does something — irrelevant rows never render
       const relevant = o => !o.when || (typeof o.when === "function" ? !!o.when(cur) : cur.matches(o.when));
-      const editable = [...OPTIONS.values()].filter(o => o.on === "slide" && !o.derived && (o.values || o.type === "flag") && relevant(o));
-      const isSet = o => cur.getAttribute(o.name) !== null;
+      const editable = [...OPTIONS.values()].filter(o => inPanel(o) && optTarget(o, cur) && relevant(o));
+      const isSet = o => optTarget(o, cur).getAttribute(o.name) !== null;
       const row = o => {
-        const curV = cur.getAttribute(o.name);
+        const curV = optTarget(o, cur).getAttribute(o.name);
         const name = escapeHtml(o.name), label = escapeHtml(o.label || o.name);
         let ctl;
         if (o.type === "flag") {
@@ -2515,12 +2554,13 @@
       // resolve the slide at click time — `cur` may be detached if the deck
       // was rebuilt (⌘D, ⌫) while the popover stayed open
       const apply = (name, v) => {
-        const def = OPTIONS.get(name), s = slides[index];
+        const def = OPTIONS.get(name), s = slides[index], el = optTarget(def, s);
+        if (!el) return;
         // "" sets a valueless attribute (flag on), null removes it
         const next = def.type === "flag" ? (v === "on" ? "" : null) : (v || null);
-        if (s.getAttribute(name) === next) return;   // no-op click: don't snapshot/autosave
+        if (el.getAttribute(name) === next) return;   // no-op click: don't snapshot/autosave
         snapshot();
-        if (next === null) s.removeAttribute(name); else s.setAttribute(name, next);
+        if (next === null) el.removeAttribute(name); else el.setAttribute(name, next);
         def.onchange?.(s);                         // option-specific side effects (e.g. re-marking reveal steps)
         renderPopover("options", anchor);          // re-render with the new state
       };
@@ -2537,7 +2577,7 @@
       if (reset) reset.onclick = () => {
         const s = slides[index], held = editable.filter(isSet);
         snapshot();
-        held.forEach(o => { s.removeAttribute(o.name); o.onchange?.(s); });
+        held.forEach(o => { optTarget(o, s)?.removeAttribute(o.name); o.onchange?.(s); });
         renderPopover("options", anchor);
       };
       const find = $(".opt-find", layer);
@@ -2836,7 +2876,7 @@
       end: `<i style="left:25%;top:42%;width:50%;height:10%"></i>`,
     };
     const bg = key === "section" ? " style=\"background:var(--accent)\"" : "";
-    return `<div class="wf"${bg}>${WF[key] || ""}</div>`;
+    return `<div class="wf"${bg}>${layoutWF.has(key) ? layoutWF.get(key) : WF[key] || ""}</div>`;
   }
 
   function openPicker(anchor) {
@@ -2849,7 +2889,7 @@
         <h4>Add a slide after ${index + 1}</h4>
         <p class="pop__sub">Layouts from your brand. Each comes with placeholder text in the right places.</p>
         <div class="picker__grid">
-          ${LAYOUTS.map(l => `<button class="tile" data-key="${l.key}">${tileWireframe(l.key)}<span>${escapeHtml(l.label)}</span></button>`).join("")}
+          ${LAYOUTS.map(l => `<button class="tile" data-key="${escapeHtml(l.key)}">${tileWireframe(l.key)}<span>${escapeHtml(l.label)}</span></button>`).join("")}
         </div>
         <div class="describe">
           <svg class="icon"><use href="#i-spark"/></svg>
@@ -3454,7 +3494,10 @@
     booted = true;
     document.body.classList.add("is-ready");
     degrainImages();
-    validateOptions();
+    // after every extension script has run (they load after runtime.js), so a
+    // brand's own values are declared before anything is called a typo
+    const runValidation = () => { optionsValidated = true; validateOptions(); };
+    document.readyState === "complete" ? setTimeout(runValidation) : addEventListener("load", () => setTimeout(runValidation), { once: true });
     // programmatic access for tooling, tests and brand extensions:
     // options   — per-slide option registry (declare / get / all); declared
     //             derived options are stripped on save, declared values get
@@ -3466,6 +3509,8 @@
     window.slaydy = {
       serialize, snapshot, toast, transient: TRANSIENT,
       options: { declare: declareOption, get: n => OPTIONS.get(n), all: () => [...OPTIONS.values()] },
+      layouts: { add: addLayout, remove: removeLayout, all: () => LAYOUTS.map(l => ({ key: l.key, label: l.label })) },
+      transitions: { add: addTransition, all: () => [...OPTIONS.get("data-transition").values] },
     };
     measureAll();
     document.fonts?.ready?.then(measureAll);
