@@ -29,6 +29,8 @@ the named thing has something to do or to delete), **port** (every fork has to a
   before brand scripts, so a brand's own value (a transition name, say) warned on every load.
 - `options.declare({ on: "<selector>" })`: an option that lives on an element inside the slide.
   The Options panel sets it on the first match and only shows it where there is one.
+- `CUSTOMIZING.md` shows how to swap an empty image slot's placeholder for brand art with an
+  option on the slot (`on: ".split__media"`) and CSS. No runtime change needed.
 - `--deck-shadow` (the deck's drop shadow in a window) and `--edit-ring` (the colour of every
   edit-mode ring) are tokens. Both default to what they were.
 

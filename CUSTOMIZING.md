@@ -316,6 +316,24 @@ Reduced motion turns every transition, yours included, into `fade`. Thumbnails, 
 overview and print switch off `transition` only: if yours uses `animation`, switch it off in
 `.thumb__scaler` and `@media print` too.
 
+**Brand art in an image slot.** An empty slot (`.media[data-empty]`) draws its "+ image"
+placeholder in CSS, so a brand can swap that for its own art with an option on the slot. No
+picker, no library: the author chooses from the Options panel, and uploading a real image
+still replaces it, because the slot stops being empty:
+
+```js
+slaydy.options.declare({ name: "data-art", on: ".split__media", group: "Slide", label: "Picture",
+  values: ["render", "photo", "none"], hint: "Brand art in the empty image slot." });
+```
+```css
+.split__media[data-empty][data-art]::after { content: none; }   /* any choice, "none" included, drops the prompt */
+.split__media[data-empty][data-art="render"] { background: url("../assets/render.webp") center / cover; }
+.split__media[data-empty][data-art="photo"]  { background: url("../assets/photo.webp") center / cover; }
+```
+
+To make a render the default, ship it in the layout's markup (`<figure class="media split__media"
+data-art="render">` in `layouts.add()`). Both exports and the PNG export inline the `url()`s.
+
 **Tell the lint about them.** `standalone.py` lints every deck it builds, and Claude clears its
 `fix` lines before handing a deck over, so a line that is wrong for your markup is an
 instruction to damage it. Out of the box the lint is careful with markup it does not recognise:
