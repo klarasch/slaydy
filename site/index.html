@@ -295,10 +295,10 @@ footer a:hover{color:var(--ink)}
       <p>Open <code>deck.html</code> in Chrome and press <kbd>E</kbd>.</p>
       <ul class="fl">
         <li>Click any text to rewrite it</li>
-        <li>Paste an image, drag it, resize it</li>
+        <li>Paste an image, or a link onto any text</li>
         <li>Add, duplicate and reorder slides</li>
         <li>Undo everything with <kbd>⌘Z</kbd></li>
-        <li>Save back into the deck’s own folder</li>
+        <li>Download a copy with your changes in it</li>
       </ul>
     </div>
     <div class="mode">
@@ -317,7 +317,7 @@ footer a:hover{color:var(--ink)}
       <ul class="fl">
         <li><kbd>S</kbd> presenter view with notes on a second screen</li>
         <li><kbd>P</kbd> PDF, one 16:9 page per slide, text stays text</li>
-        <li><kbd>D</kbd> one self-contained HTML file to share</li>
+        <li><kbd>D</kbd> one self-contained HTML file, or a view-only copy without your notes</li>
         <li><kbd>O</kbd> overview of every slide</li>
         <li><kbd>C</kbd> copy the current slide as a PNG</li>
       </ul>
@@ -451,8 +451,8 @@ themes/acme.md before writing a slide.</pre>
     <ol>
       <li><h4>Tokens</h4><p>Colours, typefaces, radius and the wash restyle every layout at once. Most brands stop here.</p></li>
       <li><h4>Theme CSS</h4><p>The theme is a full stylesheet loaded after the runtime: patterns, section treatments, your own emphasis style.</p></li>
-      <li><h4>Your own layouts</h4><p>Define <code>slide--acme-demo</code>, describe it in <code>themes/acme.md</code>, and Claude generates and revises it.</p></li>
-      <li><h4>Scripts and graphics</h4><p>A <code>custom/</code> folder adds behaviour on runtime events: animation, widgets, interactive slides like the one in the demo.</p></li>
+      <li><h4>Your own layouts</h4><p>Define <code>slide--acme-demo</code>, describe it in <code>themes/acme.md</code>, and Claude generates and revises it. One line puts it in the Add-slide picker.</p></li>
+      <li><h4>Scripts and graphics</h4><p>A <code>custom/</code> folder adds behaviour on runtime events: your own transitions and slide options, animation, interactive slides like the one in the demo.</p></li>
     </ol>
   </div>
 </section>
@@ -501,7 +501,7 @@ themes/acme.md before writing a slide.</pre>
 <span class="ok">check</span> 3-slide deck renders in Acme
 <span class="ok">commit</span> Take slaydy 53584be
 
-New since last time: presenter view advances on click.
+New since last time: paste a link, export a view-only copy.
 Reinstall to ~/.claude/skills/acme-decks?</div>
   </div>
 

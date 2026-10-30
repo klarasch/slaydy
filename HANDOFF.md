@@ -75,7 +75,7 @@ icons, standalone.py, and everything else in the folder that isn't a dev file (t
 .html/.sh, non-contract .md, dot-files, dist/, `.skillignore` patterns) — so a fork's brand
 layer ships whatever it is called. The shipped SKILL.md is composed: a fork's `SKILL.fork.md` (frontmatter + standing
 orders) over upstream's generic body, so SKILL.md and build.sh are both upstream-owned and a
-fork edits neither (2026-09-04; before that the S1 fork regex-patched the frontmatter from its
+fork edits neither (2026-09-04; before that one fork regex-patched the frontmatter from its
 own build.sh and kept shipping as "slaydy" when upstream reworded a line).
 First real skill-install test (2026-08-24, `~/Code/slidecraft-testbed`) caught a contract hole:
 with the demo deck excluded from the build, nothing documented the deck.html shell, and the
